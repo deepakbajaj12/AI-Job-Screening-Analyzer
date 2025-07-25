@@ -28,3 +28,8 @@ Thumbs.db
 backend/firebase_key.json
 backend/firebase-service-account.json
 node_modules
+
+# Ignore Python virtual environments
+venv/
+Backend_old/venv/
+Backend/venv/
