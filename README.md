@@ -1,30 +1,269 @@
-# 🧠 AI Resume Screening Platform
+<div align="center">
 
-This is a full-stack web application designed to automate the process of resume screening using AI and NLP techniques. It parses resumes and job descriptions, matches them intelligently, and provides feedback using modern AI models. Ideal for recruiters and job platforms looking to streamline candidate evaluation.
+# 🧠 AI Job Screening & Talent Intelligence Platform
+
+Smart, explainable, and extensible AI-powered resume + job description analysis with coaching, semantic matching, interview readiness, and recruiter automation.
+
+[![Status](https://img.shields.io/badge/status-active-success)]() [![Python](https://img.shields.io/badge/Python-3.12+-blue)]() [![Flask](https://img.shields.io/badge/Backend-Flask-green)]() [![React](https://img.shields.io/badge/Frontend-React-61dafb)]() [![License](https://img.shields.io/badge/license-MIT-lightgrey)]()  
+
+</div>
+
+
+## 📑 Table of Contents
+1. Overview  
+2. Core Features  
+3. Architecture  
+4. Tech Stack  
+5. Screens & Flows (Concept)  
+6. Backend API  
+7. Environment Variables  
+8. Quick Start  
+9. Development & Testing  
+10. Data & Persistence  
+11. Security & RBAC  
+12. Roadmap  
+13. Contributing  
+14. License & Credits  
 
 ---
 
-## 🚀 Features
-
-- 🔍 **Resume & JD Parsing**: Extracts text from PDF/DOCX files using NLP (spaCy, TF-IDF).
-- 🤖 **AI-Powered Feedback**: Integrated with **OpenAI GPT** and **Cohere** to generate personalized resume suggestions.
-- 📊 **Matching Score**: Compares resumes to job descriptions and calculates a relevance score.
-- 📑 **Automated Reports**: Generates feedback reports in PDF format.
-- 📨 **Email Notifications**: Sends interview invites and feedback via SMTP.
-- 🔐 **Authentication System**: Secure login with **Firebase Auth**.
-- 💾 **Database**: Uses **MongoDB** to store user data and application history.
-- 🎨 **Modern UI**: Built with **React**, **Tailwind CSS**, and features light/dark mode.
-- 👥 **Recruiter Dashboard**: Batch analysis of resumes and job descriptions.
+## 1. Overview
+This platform accelerates candidate screening by extracting structured insight from resumes & job descriptions, scoring semantic fit, surfacing skill gaps, and coaching candidates toward higher match quality. Recruiters gain automated evaluation, version history, and auditability; candidates get personalized improvement pathways and interview prep.
 
 ---
 
-## 🛠️ Tech Stack
-
-| Frontend      | Backend     | AI/NLP       | Database | Auth        | Deployment |
-|---------------|-------------|--------------|----------|-------------|------------|
-| React         | Flask       | spaCy, TF-IDF, GPT, Cohere | MongoDB  | Firebase Auth | Firebase / Render / Railway |
+## 2. Core Features
+| Area | Capabilities |
+|------|--------------|
+| Resume + JD Analysis | AI-generated strengths, improvements, recommended roles, semantic & lexical matching |
+| Semantic Matching | TF‑IDF + cosine overlay (embeddings-ready abstraction) |
+| Coaching | Versioned resume metrics, skill gap detection, study resource packs |
+| Diff Intelligence | Compare any two versions: added/removed skills, metric deltas |
+| Interview Prep | Role-tailored question generation via unified LLM interface |
+| Structured Parsing | Heuristic section extraction (skills, experience, projects, etc.) |
+| RBAC & Audit | Role-based access + JSONL audit and event logs |
+| Event System | Email + webhook dispatch on analyses and version saves |
+| Rate Limiting | Sliding window protections per user/IP |
+| Health & Observability | /health, /version endpoints; structured logs planned |
+| Dev Mode | Token bypass for rapid local iteration (`DEV_BYPASS_AUTH=1`) |
 
 ---
 
-## 📂 Project Structure
+## 3. High-Level Architecture
+```
+┌─────────────┐       ┌────────────────┐        ┌─────────────────────┐
+│  Frontend   │  -->  │  Flask Backend │  -->   │  LLM Providers       │
+│ (React)     │       │  (REST API)    │        │ (Cohere / OpenAI)    │
+└─────┬───────┘       ├────────────────┤        └─────────┬───────────┘
+		│               │ Resume Parsing │                  │
+		│               │ Semantic Match │ <─────────┐      │
+		│               │ Coaching Store │            │      │
+		│               │ Audit + Events │            │      │
+		│               └──────┬─────────┘            │      │
+		│                      │                      │      │
+		│            JSONL Persistence (data/) <───────┘      │
+		│                                                     │
+		└───────── API Calls / Auth (Firebase) ───────────────┘
+```
+
+Pluggable design: current semantic layer uses TF‑IDF; can be upgraded to vector DB (FAISS/Pinecone/Qdrant) without changing clients.
+
+---
+
+## 4. Tech Stack
+| Layer | Tools |
+|-------|-------|
+| Frontend | React, Tailwind CSS (planned integration) |
+| Backend | Flask, Python 3.12 |
+| AI / NLP | Cohere Chat, OpenAI (optional), spaCy model, TF‑IDF (scikit-learn) |
+| Auth | Firebase Auth (client) + Firebase Admin (server) |
+| Data Store | JSON files (audit, versions, roles) – upgrade path: Postgres / MongoDB / Vector DB |
+| Email / Events | SMTP, Webhook POST |
+| Testing | pytest |
+
+---
+
+## 5. Screens & Functional Flows (Conceptual)
+Candidate Dashboard:
+- Upload resume → get analysis → save version → view progress chart → request interview questions.
+Recruiter View:
+- Upload JD + resume → receive lexical, semantic, combined match + structured report.
+Admin Console:
+- Assign roles, view audits, monitor health.
+
+---
+
+## 6. Backend API (Current)
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| /analyze | POST | Yes | Analyze resume (jobSeeker / recruiter modes) |
+| /coaching/save-version | POST | Yes | Persist resume version + metrics |
+| /coaching/progress | GET | Yes | List stored versions |
+| /coaching/diff | GET | Yes | Compare two versions (metrics & skills) |
+| /coaching/study-pack | GET | Yes | Skill gaps + resources |
+| /coaching/interview-questions | GET | Yes | LLM questions (targetRole param) |
+| /admin/audit | GET | Admin | Recent audit entries (tail) |
+| /admin/set-role | POST | Admin | Assign role to userId |
+| /health | GET | No | Liveness JSON |
+| /version | GET | No | Current backend version |
+
+### Analyze (Recruiter) Response (Fields)
+```
+{
+  strengths: [],
+  improvementAreas: [],
+  recommendedRoles: [],
+  generalFeedback: "Lexical Match: 62% | Semantic: 71% | Combined: 66.5% ...",
+  lexicalMatchPercentage: 62.0,
+  semanticMatchPercentage: 71.0,
+  combinedMatchPercentage: 66.5,
+  formattedReport: "..."
+}
+```
+
+### Diff Endpoint Example
+```
+GET /coaching/diff?prev=1&curr=3
+{
+  "prevVersion": 1,
+  "currVersion": 3,
+  "addedSkills": ["docker"],
+  "removedSkills": ["excel"],
+  "metricDeltas": {"wordCount": 120, "skillCoverageRatio": 0.18},
+  "currMetrics": {...},
+  "prevMetrics": {...}
+}
+```
+
+---
+
+## 7. Environment Variables
+Reference: `.env.example`.
+
+| Key | Purpose | Default |
+|-----|---------|---------|
+| APP_VERSION | Version label surfaced at /version | 0.4.0 |
+| FIREBASE_CREDENTIAL_PATH | Firebase admin service JSON | firebase-service-account.json |
+| COHERE_API_KEY | Cohere chat model key | — |
+| OPENAI_API_KEY | OpenAI key (optional) | — |
+| LLM_MODEL | Provider:model (e.g. cohere:command-light-nightly) | cohere:command-light-nightly |
+| DATA_DIR | Persistence root | data |
+| DEV_BYPASS_AUTH | Local auth bypass (1=enabled) | 0 |
+| SMTP_HOST/PORT/USER/PASS | Email sending | — |
+| EMAIL_FROM | Sender address | no-reply@example.com |
+| WEBHOOK_URL | Outbound event POST target | — |
+
+NEVER commit real keys—use `.env` (gitignored).
+
+---
+
+## 8. Quick Start
+### Backend
+```bash
+python -m venv venv
+venv/Scripts/activate  # Windows PowerShell
+pip install -r Backend_old/requirements.txt
+copy .env.example .env  # then edit .env
+python Backend_old/app.py
+```
+
+### Sample cURL (Job Seeker Mode)
+```bash
+curl -X POST http://localhost:5000/analyze \
+  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+  -F mode=jobSeeker \
+  -F resume=@sample_resume.pdf \
+  -F jobDescription="Backend engineer building scalable services"
+```
+
+### Frontend (if present)
+```bash
+cd frontend
+npm install
+npm start
+```
+
+---
+
+## 9. Development & Testing
+Run base tests:
+```bash
+pytest -q
+```
+Add more integration tests under `tests/` (auth-protected tests can set `DEV_BYPASS_AUTH=1`).
+
+Suggested future test areas:
+- Mock pdfplumber for controlled resume extraction.
+- Semantic score reproducibility tests.
+- RBAC denial tests.
+
+---
+
+## 10. Data & Persistence
+| Path | Contents |
+|------|----------|
+| data/coaching/resume_versions.json | Per-user version arrays |
+| data/audit/audit.jsonl | Line-delimited audit entries |
+| data/audit/events.jsonl | Emitted events (analysis, version saved) |
+| data/roles.json | Simple role registry (admin/user) |
+
+Upgrade path: move to relational DB (versions, analyses, roles, audit) + vector store for embeddings.
+
+---
+
+## 11. Security & RBAC
+- Firebase token validation (with dev bypass option)  
+- Role guard decorator for admin endpoints  
+- Future Improvements:
+  - Replace JSON role store with database / policy engine
+  - Field-level encryption for PII
+  - Request correlation IDs + structured logging
+
+---
+
+## 12. Roadmap (Short / Mid Term)
+| Phase | Highlights |
+|-------|-----------|
+| 1 | Vector embeddings + similarity store |
+| 2 | Async processing queue (Celery / RQ) |
+| 3 | Prompt registry + evaluation harness |
+| 4 | Advanced parsing (NER + classifier) |
+| 5 | Multi-tenant org isolation |
+| 6 | Full observability (OpenTelemetry) |
+
+Extended Ideas: candidate mock interview simulator, career path forecasting, ATS connectors, bias diagnostics.
+
+---
+
+## 13. Contributing
+1. Fork & clone
+2. Create feature branch: `git checkout -b feat/your-feature`
+3. Write tests for new logic
+4. Run `pytest -q`
+5. Submit PR with clear description & screenshots/logs if UI/API change
+
+Code Style Guidelines:
+- Keep endpoints RESTful & explicit.
+- Avoid silent failures—log warnings.
+- Keep public responses JSON schema-stable.
+
+---
+
+## 14. License & Credits
+MIT License (add LICENSE file if not present).  
+Built with Flask, Cohere, optional OpenAI, and community Python tooling.
+
+---
+
+## 15. Support / Questions
+Open an Issue or start a Discussion. For security disclosures, do **not** file a public issue—email the maintainer.
+
+---
+
+## 16. Changelog Snapshot (v0.4.0)
+See Milestone summary above: semantic match, structured parsing, coaching diff, RBAC, rate limiting, audit/events, health endpoints.
+
+---
+
+Happy building! 🚀
 
