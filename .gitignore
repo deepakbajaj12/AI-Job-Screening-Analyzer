@@ -62,3 +62,4 @@ data/audit/*.jsonl
 
 # Git internals that might appear accidentally
 *.orig
+AI-Job-Screening-Analyzer.git/
