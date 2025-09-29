@@ -33,3 +33,10 @@ node_modules
 venv/
 Backend_old/venv/
 Backend/venv/
+
+# Ignore environment files
+.env
+.env.local
+
+# Optional: Ignore Firebase config if still present in the source code
+src/firebase.js
