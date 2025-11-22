@@ -183,6 +183,32 @@ npm install
 npm start
 ```
 
+### Frontend (New)
+- Vite + React + TypeScript app scaffolded under `frontend/`
+
+Run locally:
+```powershell
+cd frontend
+npm install
+copy .env.example .env   # set VITE_API_BASE_URL and optional Firebase keys
+npm run dev
+```
+
+Build for production:
+```powershell
+cd frontend
+npm run build
+```
+
+Environment vars (`frontend/.env`):
+- `VITE_API_BASE_URL` (default `http://localhost:5000`)
+- Optional Firebase Auth: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`
+
+Key Screens:
+- Job Seeker: upload resume PDF + optional job description text → `/analyze` (jobSeeker)
+- Recruiter: upload resume + JD PDFs + recruiter email → `/analyze` (recruiter)
+- Health badge in navbar calls `/health` and `/version`
+
 ---
 
 ## 9. Development & Testing
