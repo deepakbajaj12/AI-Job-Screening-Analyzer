@@ -1,0 +1,72 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class Config:
+    """Centralized configuration for the Resume Analyzer backend.
+
+    All environment variables are loaded via python-dotenv (if a .env file exists)
+    to simplify local development while remaining 12-factor friendly in production.
+    """
+
+    APP_VERSION: str = os.getenv("APP_VERSION", "0.4.0")
+    DEV_BYPASS_AUTH: bool = os.getenv("DEV_BYPASS_AUTH", "0") == "1"
+
+    FIREBASE_CREDENTIAL_PATH: str = os.getenv(
+        "FIREBASE_CREDENTIAL_PATH", "firebase-service-account.json"
+    )
+
+    COHERE_API_KEY: str | None = os.getenv("COHERE_API_KEY")
+    OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "cohere:command-light-nightly")
+
+    DATA_DIR: str = os.getenv("DATA_DIR", "data")
+
+    SMTP_HOST: str | None = os.getenv("SMTP_HOST")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str | None = os.getenv("SMTP_USER")
+    SMTP_PASS: str | None = os.getenv("SMTP_PASS")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "no-reply@example.com")
+    WEBHOOK_URL: str | None = os.getenv("WEBHOOK_URL")
+
+
+def init_directories(config: Config) -> None:
+    """Ensure required persistence directories exist."""
+    data_dir = config.DATA_DIR
+    coaching_dir = os.path.join(data_dir, "coaching")
+    audit_dir = os.path.join(data_dir, "audit")
+    os.makedirs(coaching_dir, exist_ok=True)
+    os.makedirs(audit_dir, exist_ok=True)
+
+
+def configure_logging() -> None:
+    """Set up basic structured logging.
+
+    Uses a single stdout handler to remain container-friendly.
+    """
+    import logging, sys, json, time
+
+    class JsonFormatter(logging.Formatter):
+        def format(self, record: logging.LogRecord) -> str:
+            payload = {
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+            }
+            if record.exc_info:
+                payload["exception"] = self.formatException(record.exc_info)
+            return json.dumps(payload, ensure_ascii=False)
+
+    root = logging.getLogger("resume_analyzer")
+    if root.handlers:
+        return  # already configured
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JsonFormatter())
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
+__all__ = ["Config", "init_directories", "configure_logging"]

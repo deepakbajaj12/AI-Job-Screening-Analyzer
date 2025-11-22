@@ -44,7 +44,7 @@ This platform accelerates candidate screening by extracting structured insight f
 | RBAC & Audit | Role-based access + JSONL audit and event logs |
 | Event System | Email + webhook dispatch on analyses and version saves |
 | Rate Limiting | Sliding window protections per user/IP |
-| Health & Observability | /health, /version endpoints; structured logs planned |
+| Health & Observability | /health, /version endpoints; JSON structured logging |
 | Dev Mode | Token bypass for rapid local iteration (`DEV_BYPASS_AUTH=1`) |
 
 ---
@@ -262,6 +262,16 @@ Open an Issue or start a Discussion. For security disclosures, do **not** file a
 
 ## 16. Changelog Snapshot (v0.4.0)
 See Milestone summary above: semantic match, structured parsing, coaching diff, RBAC, rate limiting, audit/events, health endpoints.
+
+### Professional Enhancements Added
+- Centralized configuration module (`Backend_old/config.py`)
+- JSON structured logging (stdout + container-friendly)
+- `.env.example` template and dotenv loading
+- Dockerfile for reproducible deployments
+- GitHub Actions CI pipeline (Python tests + Node placeholder)
+- Expanded environment variable documentation & safer secret handling
+
+Upcoming: linting (flake8/black, ESLint), metrics endpoint, security hardening & dependency scanning.
 
 ---
 

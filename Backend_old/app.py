@@ -11,39 +11,45 @@ import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
 import cohere
 import pdfplumber
-from dotenv import load_dotenv
 import importlib
+import logging
+import sys
 OpenAI = None  # default if library unavailable
 import smtplib
 from email.mime.text import MIMEText
 import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from Backend_old.config import Config, init_directories, configure_logging
 try:
     _openai_mod = importlib.import_module("openai")
     OpenAI = getattr(_openai_mod, "OpenAI", None)
 except Exception:
     OpenAI = None
 
-load_dotenv()
+# Central configuration & logging
+configure_logging()
+logger = logging.getLogger("resume_analyzer")
+config = Config()
+init_directories(config)
 
 app = Flask(__name__)
 CORS(app)
 
-APP_VERSION = os.getenv("APP_VERSION", "0.4.0")  # increment when major feature blocks added
-DEV_BYPASS_AUTH = os.getenv("DEV_BYPASS_AUTH", "0") == "1"
+APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
+DEV_BYPASS_AUTH = config.DEV_BYPASS_AUTH
 
 # Initialize Firebase Admin SDK
-firebase_cred_path = os.getenv("FIREBASE_CREDENTIAL_PATH", "firebase-service-account.json")
+firebase_cred_path = config.FIREBASE_CREDENTIAL_PATH
 cred = credentials.Certificate(firebase_cred_path)
 firebase_admin.initialize_app(cred)
 
 # =============================
 # LLM / Model Provider Setup
 # =============================
-COHERE_API_KEY = os.getenv("COHERE_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-LLM_MODEL = os.getenv("LLM_MODEL", "cohere:command-light-nightly")  # e.g. cohere:command-light-nightly or openai:gpt-5-codex-preview
+COHERE_API_KEY = config.COHERE_API_KEY
+OPENAI_API_KEY = config.OPENAI_API_KEY
+LLM_MODEL = config.LLM_MODEL  # e.g. cohere:command-light-nightly or openai:gpt-5-codex-preview
 
 cohere_client = cohere.Client(COHERE_API_KEY) if COHERE_API_KEY else None
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if (OPENAI_API_KEY and OpenAI) else None
@@ -51,7 +57,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if (OPENAI_API_KEY and OpenAI) el
 # =============================
 # Data Persistence (Coaching)
 # =============================
-DATA_DIR = os.getenv("DATA_DIR", "data")
+DATA_DIR = config.DATA_DIR
 COACHING_DIR = os.path.join(DATA_DIR, "coaching")
 VERSIONS_FILE = os.path.join(COACHING_DIR, "resume_versions.json")
 AUDIT_DIR = os.path.join(DATA_DIR, "audit")
@@ -174,17 +180,17 @@ def require_role(required_roles):
 # =============================
 # Event Bus (Email + Webhook stubs)
 # =============================
-SMTP_HOST = os.getenv('SMTP_HOST')
-SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
-SMTP_USER = os.getenv('SMTP_USER')
-SMTP_PASS = os.getenv('SMTP_PASS')
-EMAIL_FROM = os.getenv('EMAIL_FROM', 'no-reply@example.com')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+SMTP_HOST = config.SMTP_HOST
+SMTP_PORT = config.SMTP_PORT
+SMTP_USER = config.SMTP_USER
+SMTP_PASS = config.SMTP_PASS
+EMAIL_FROM = config.EMAIL_FROM
+WEBHOOK_URL = config.WEBHOOK_URL
 
 def send_email(to_addr, subject, body):
     if not (SMTP_HOST and SMTP_USER and SMTP_PASS):
         # Email disabled; log only
-        print(f"[email-disabled] Would send to {to_addr}: {subject}")
+        logger.info(f"email.disabled to={to_addr} subject={subject}")
         return False
     try:
         msg = MIMEText(body, 'plain', 'utf-8')
@@ -197,7 +203,7 @@ def send_email(to_addr, subject, body):
             s.send_message(msg)
         return True
     except Exception as e:
-        print(f"Email send failed: {e}")
+        logger.error(f"email.send_failed error={e}")
         return False
 
 def post_webhook(event_type, payload):
@@ -207,7 +213,7 @@ def post_webhook(event_type, payload):
         r = requests.post(WEBHOOK_URL, json={'event': event_type, 'payload': payload}, timeout=5)
         return r.status_code < 400
     except Exception as e:
-        print(f"Webhook error: {e}")
+        logger.error(f"webhook.error error={e}")
         return False
 
 def dispatch_event(event_type, payload):
@@ -240,7 +246,7 @@ def call_llm(prompt, temperature=0.6):
     try:
         if provider == "cohere":
             if not cohere_client:
-                print("Cohere client not configured")
+                logger.warning("llm.cohere_not_configured")
                 return None
             resp = cohere_client.chat(
                 model=model,
@@ -250,7 +256,7 @@ def call_llm(prompt, temperature=0.6):
             return resp.text.strip()
         elif provider == "openai":
             if not openai_client:
-                print("OpenAI client not configured")
+                logger.warning("llm.openai_not_configured")
                 return None
             resp = openai_client.chat.completions.create(
                 model=model,
@@ -259,10 +265,10 @@ def call_llm(prompt, temperature=0.6):
             )
             return resp.choices[0].message.content.strip()
         else:
-            print(f"Unsupported LLM provider: {provider}")
+            logger.warning(f"llm.unsupported_provider provider={provider}")
             return None
     except Exception as e:
-        print(f"LLM call failed: {e}")
+        logger.error(f"llm.call_failed error={e}")
         return None
 
 def verify_firebase_token(id_token):
@@ -270,7 +276,7 @@ def verify_firebase_token(id_token):
         decoded_token = firebase_auth.verify_id_token(id_token)
         return decoded_token
     except Exception as e:
-        print(f"Token verification failed: {e}")
+        logger.error(f"auth.token_verification_failed error={e}")
         if DEV_BYPASS_AUTH:
             # Provide a synthetic user in dev mode
             return {"uid": "dev-user", "email": "dev@example.com", "devBypass": True}
@@ -287,7 +293,7 @@ def extract_text_from_pdf(file_storage):
                     full_text += text + "\n"
         return full_text.strip()
     except Exception as e:
-        print(f"PDF text extraction error: {e}")
+        logger.error(f"pdf.extract_error error={e}")
         return None
 
 def call_cohere_api(prompt):
@@ -300,8 +306,8 @@ def extract_json_from_text(text):
         json_str = re.search(r"\{.*\}", text, re.DOTALL).group(0)
         return json.loads(json_str)
     except Exception as e:
-        print(f"JSON extraction failed: {e}")
-        print("Raw response:", text)
+        logger.error(f"json.extract_failed error={e}")
+        logger.info(f"json.raw_response snippet={text[:200]}")
         return None
 
 def ensure_non_empty_fields(data):
@@ -466,7 +472,7 @@ def compute_semantic_match(resume_text, job_text):
         sim = cosine_similarity(X[0:1], X[1:2])[0][0]
         return round(float(sim) * 100, 2)
     except Exception as e:
-        print(f"Semantic match error: {e}")
+        logger.error(f"semantic.match_error error={e}")
         return None
 
 def generate_interview_questions(resume_excerpt, target_role, top_skills):

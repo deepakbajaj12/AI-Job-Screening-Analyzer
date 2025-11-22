@@ -1,5 +1,18 @@
 {
+  "name": "resume-analyzer-node-backend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "lint": "echo 'Add ESLint config'"
+  },
   "dependencies": {
-    "firebase-admin": "^13.3.0"
+    "firebase-admin": "^13.3.0",
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.3.1",
+    "winston": "^3.12.0"
   }
 }
