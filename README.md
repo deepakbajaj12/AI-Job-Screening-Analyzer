@@ -203,11 +203,13 @@ npm run build
 Environment vars (`frontend/.env`):
 - `VITE_API_BASE_URL` (default `http://localhost:5000`)
 - Optional Firebase Auth: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`
+ - Dev bypass (no Firebase): `VITE_DEV_BYPASS=1` enables a dummy token so protected endpoints can be tested locally.
 
 Key Screens:
 - Job Seeker: upload resume PDF + optional job description text → `/analyze` (jobSeeker)
 - Recruiter: upload resume + JD PDFs + recruiter email → `/analyze` (recruiter)
 - Health badge in navbar calls `/health` and `/version`
+ - Coaching: save versions, view progress & study pack, fetch interview questions, and compute diffs
 
 ---
 
