@@ -106,6 +106,7 @@ Admin Console:
 | /admin/set-role | POST | Admin | Assign role to userId |
 | /health | GET | No | Liveness JSON |
 | /version | GET | No | Current backend version |
+| /metrics | GET | No | Simple server metrics (uptime, counters, avg latency) |
 
 ### Analyze (Recruiter) Response (Fields)
 ```
@@ -210,6 +211,9 @@ Key Screens:
 - Recruiter: upload resume + JD PDFs + recruiter email → `/analyze` (recruiter)
 - Health badge in navbar calls `/health` and `/version`
  - Coaching: save versions, view progress & study pack, fetch interview questions, and compute diffs
+ - Coaching UX enhancements:
+   - Study Pack: debounced search across skills/hosts/tags; copy link buttons
+   - Metrics Chart: checkboxes to show/hide datasets (Word Count, Skill Coverage)
 
 ---
 
@@ -219,6 +223,13 @@ Run base tests:
 pytest -q
 ```
 Add more integration tests under `tests/` (auth-protected tests can set `DEV_BYPASS_AUTH=1`).
+Frontend lint/format:
+```powershell
+cd frontend
+npm run lint
+npm run format
+```
+
 
 Suggested future test areas:
 - Mock pdfplumber for controlled resume extraction.
@@ -300,6 +311,12 @@ See Milestone summary above: semantic match, structured parsing, coaching diff, 
 - Expanded environment variable documentation & safer secret handling
 
 Upcoming: linting (flake8/black, ESLint), metrics endpoint, security hardening & dependency scanning.
+
+### Newly Added (Dec 2025)
+- Frontend: Study Pack search + link copy actions
+- Frontend: Metrics Chart dataset toggles
+- Frontend: ESLint + Prettier configuration and scripts
+- Backend: `/metrics` endpoint with uptime, request counters, average analyze latency
 
 ---
 

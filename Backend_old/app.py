@@ -38,6 +38,8 @@ CORS(app)
 
 APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
 DEV_BYPASS_AUTH = config.DEV_BYPASS_AUTH
+START_TIME = time.time()
+_metrics = {'requests': 0, 'analyze': {'count': 0, 'avgMs': 0.0}, 'errors': 0}
 
 # Initialize Firebase Admin SDK
 firebase_cred_path = config.FIREBASE_CREDENTIAL_PATH
@@ -532,10 +534,16 @@ def health():
 def version():
     return jsonify({'version': APP_VERSION})
 
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    uptime = round(time.time() - START_TIME, 1)
+    return jsonify({'uptimeSeconds': uptime, **_metrics})
+
 @app.route("/analyze", methods=["POST"])
 @rate_limit(40, 60)
 def analyze():
     start = time.time()
+    _metrics['requests'] += 1
 
     # Verify Firebase token from Authorization header
     auth_header = request.headers.get("Authorization")
@@ -613,6 +621,11 @@ Job Description:
             'semanticMatch': semantic_score,
             'notifyEmail': None
         })
+        # track latency
+        elapsed = (time.time() - start) * 1000.0
+        m = _metrics['analyze']
+        m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
+        m['count'] += 1
         return jsonify(final_result)
 
     elif mode == "recruiter":
@@ -690,9 +703,15 @@ Job Description:
             'notifyEmail': recruiter_email if recruiter_email else None
         })
         final_result["formattedReport"] = format_report(final_result)
+        # track latency
+        elapsed = (time.time() - start) * 1000.0
+        m = _metrics['analyze']
+        m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
+        m['count'] += 1
         return jsonify(final_result)
 
     else:
+        _metrics['errors'] += 1
         return jsonify({"error": "Unhandled mode"}), 400
 
 # =============================
