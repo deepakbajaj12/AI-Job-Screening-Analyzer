@@ -34,7 +34,16 @@ config = Config()
 init_directories(config)
 
 app = Flask(__name__)
-CORS(app)
+from Backend_old.config import Config as _Cfg
+_origins = _Cfg.ALLOWED_ORIGINS
+if _origins and _origins != "*":
+    try:
+        allowed = [o.strip() for o in _origins.split(',') if o.strip()]
+    except Exception:
+        allowed = [_origins]
+    CORS(app, origins=allowed, supports_credentials=True)
+else:
+    CORS(app)
 
 APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
 DEV_BYPASS_AUTH = config.DEV_BYPASS_AUTH
@@ -521,6 +530,24 @@ def auth_required(fn):
 @app.route("/", methods=["GET"])
 def index():
     return "AI Job Screening Resume Analyzer Backend Running."
+
+@app.after_request
+def set_security_headers(response):
+    # Basic hardening headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # HSTS enabled when served over HTTPS (ignored on HTTP)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # Minimal CSP allowing self and inline styles/scripts used by Vite-dev; adjust for prod build
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'"
+    )
+    return response
 
 @app.route('/health', methods=['GET'])
 def health():

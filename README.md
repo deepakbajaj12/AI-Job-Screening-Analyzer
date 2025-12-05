@@ -167,6 +167,10 @@ pip install -r Backend_old/requirements.txt
 copy .env.example .env  # then edit .env
 python Backend_old/app.py
 ```
+Or via Docker Compose:
+```powershell
+docker compose up --build
+```
 
 ### Sample cURL (Job Seeker Mode)
 ```bash
@@ -205,6 +209,7 @@ Environment vars (`frontend/.env`):
 - `VITE_API_BASE_URL` (default `http://localhost:5000`)
 - Optional Firebase Auth: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`
  - Dev bypass (no Firebase): `VITE_DEV_BYPASS=1` enables a dummy token so protected endpoints can be tested locally.
+ - CORS: set backend `ALLOWED_ORIGINS` (comma separated) in `.env` for production
 
 Key Screens:
 - Job Seeker: upload resume PDF + optional job description text → `/analyze` (jobSeeker)
@@ -257,6 +262,8 @@ Upgrade path: move to relational DB (versions, analyses, roles, audit) + vector 
   - Replace JSON role store with database / policy engine
   - Field-level encryption for PII
   - Request correlation IDs + structured logging
+ - Security headers: CSP, HSTS, Referrer-Policy, Permissions-Policy, X-Content-Type-Options
+ - CORS hardening: `ALLOWED_ORIGINS` env controls allowed origins
 
 ---
 
@@ -285,6 +292,11 @@ Code Style Guidelines:
 - Keep endpoints RESTful & explicit.
 - Avoid silent failures—log warnings.
 - Keep public responses JSON schema-stable.
+ - Pre-commit recommended:
+   ```powershell
+   pip install pre-commit
+   pre-commit install
+   ```
 
 ---
 
