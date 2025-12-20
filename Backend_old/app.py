@@ -31,6 +31,7 @@ except Exception:
 configure_logging()
 logger = logging.getLogger("resume_analyzer")
 config = Config()
+
 init_directories(config)
 
 app = Flask(__name__)
@@ -244,6 +245,52 @@ def dispatch_event(event_type, payload):
 # =============================
 # LLM Abstraction
 # =============================
+def _get_mock_response(prompt):
+    """Generate a mock response when LLM is unavailable."""
+    prompt_lower = prompt.lower()
+    
+    if "json" in prompt_lower:
+        return json.dumps({
+            "strengths": ["Strong Technical Background", "Good Communication", "Problem Solving"],
+            "improvementAreas": ["Gain more leadership experience", "Learn cloud architecture"],
+            "recommendedRoles": ["Senior Developer", "Tech Lead", "Software Architect"],
+            "generalFeedback": "This is a generated mock response because the LLM API key is missing or invalid. The candidate appears to have a strong profile suitable for technical roles.",
+            "questions": [
+                "Tell me about a challenging project you worked on.",
+                "How do you handle conflicts in a team?",
+                "Describe your experience with our tech stack."
+            ],
+            "missingSkills": [
+                {"skill": "Cloud Computing", "importance": "High", "resources": ["AWS Certified Solutions Architect", "Google Cloud Documentation"]},
+                {"skill": "System Design", "importance": "Medium", "resources": ["System Design Interview by Alex Xu"]}
+            ],
+            "advice": "Focus on building scalable systems and mentoring junior developers."
+        })
+    
+    if "cover letter" in prompt_lower:
+        return """Dear Hiring Manager,
+
+I am writing to express my strong interest in the position. With my background in software development and passion for technology, I believe I would be a great fit for your team.
+
+(This is a mock cover letter generated because the LLM API key is missing.)
+
+Sincerely,
+Candidate"""
+
+    if "email" in prompt_lower:
+        return """Subject: Interview Invitation
+
+Dear Candidate,
+
+We were impressed by your application and would like to invite you for an interview.
+
+(This is a mock email generated because the LLM API key is missing.)
+
+Best regards,
+Recruiting Team"""
+
+    return "This is a mock response from the AI Job Screening system. Please configure a valid API key to get real AI analysis."
+
 def call_llm(prompt, temperature=0.6):
     """Unified LLM call supporting Cohere and OpenAI.
     LLM_MODEL format examples:
@@ -258,7 +305,7 @@ def call_llm(prompt, temperature=0.6):
         if provider == "cohere":
             if not cohere_client:
                 logger.warning("llm.cohere_not_configured")
-                return None
+                return _get_mock_response(prompt)
             resp = cohere_client.chat(
                 model=model,
                 message=prompt,
@@ -268,7 +315,7 @@ def call_llm(prompt, temperature=0.6):
         elif provider == "openai":
             if not openai_client:
                 logger.warning("llm.openai_not_configured")
-                return None
+                return _get_mock_response(prompt)
             resp = openai_client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
@@ -277,10 +324,11 @@ def call_llm(prompt, temperature=0.6):
             return resp.choices[0].message.content.strip()
         else:
             logger.warning(f"llm.unsupported_provider provider={provider}")
-            return None
+            return _get_mock_response(prompt)
     except Exception as e:
         logger.error(f"llm.call_failed error={e}")
-        return None
+        return _get_mock_response(prompt)
+
 
 def verify_firebase_token(id_token):
     try:
@@ -568,19 +616,10 @@ def metrics():
 
 @app.route("/analyze", methods=["POST"])
 @rate_limit(40, 60)
-def analyze():
+@auth_required
+def analyze(user_info):
     start = time.time()
     _metrics['requests'] += 1
-
-    # Verify Firebase token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify({"error": "Authorization header missing or malformed"}), 401
-
-    id_token = auth_header.split("Bearer ")[1]
-    user_info = verify_firebase_token(id_token)
-    if not user_info:
-        return jsonify({"error": "Invalid or expired token"}), 401
 
     mode = request.form.get("mode")
     if mode not in ["jobSeeker", "recruiter"]:
@@ -914,6 +953,172 @@ def admin_set_role(user_info):
         json.dump(roles, f, ensure_ascii=False, indent=2)
     write_audit(user_info.get('uid'), 'admin.set_role', {'target': target_uid, 'role': new_role})
     return jsonify({'updated': True, 'userId': target_uid, 'role': new_role})
+
+# =============================
+# Advanced Features Endpoints
+# =============================
+
+@app.route('/generate-cover-letter', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def generate_cover_letter(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    resume_file = request.files['resume']
+    job_description = request.form.get('jobDescription', '')
+    
+    resume_text = extract_text_from_pdf(resume_file)
+    if not resume_text:
+        return jsonify({'error': 'Could not extract text from PDF'}), 400
+
+    prompt = f"""
+    You are an expert career coach. Write a professional and persuasive cover letter for the following candidate based on their resume and the job description.
+    
+    RESUME:
+    {resume_text[:3000]}
+    
+    JOB DESCRIPTION:
+    {job_description[:3000]}
+    
+    The cover letter should be formatted correctly, highlight relevant skills, and express enthusiasm for the role.
+    """
+    
+    cover_letter = call_llm(prompt, temperature=0.7)
+    if not cover_letter:
+        return jsonify({'error': 'Failed to generate cover letter'}), 500
+        
+    return jsonify({'coverLetter': cover_letter})
+
+@app.route('/generate-interview-questions', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def generate_interview_questions(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    resume_file = request.files['resume']
+    job_description = request.form.get('jobDescription', '')
+    
+    resume_text = extract_text_from_pdf(resume_file)
+    
+    prompt = f"""
+    Generate 5-7 tailored interview questions for a candidate with the following resume applying for the described job.
+    Include a mix of behavioral, technical, and situational questions.
+    
+    RESUME:
+    {resume_text[:3000]}
+    
+    JOB DESCRIPTION:
+    {job_description[:3000]}
+    
+    Output format:
+    1. [Question]
+    2. [Question]
+    ...
+    """
+    
+    questions = call_llm(prompt, temperature=0.7)
+    if not questions:
+        return jsonify({'error': 'Failed to generate questions'}), 500
+        
+    return jsonify({'questions': questions})
+
+@app.route('/analyze-skills', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def analyze_skills(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    resume_file = request.files['resume']
+    job_description = request.form.get('jobDescription', '')
+    
+    resume_text = extract_text_from_pdf(resume_file)
+    
+    prompt = f"""
+    Analyze the skill gap between the candidate's resume and the job description.
+    Identify missing skills and suggest 3 specific learning resources (courses, books, or documentation) for each missing skill.
+    
+    RESUME:
+    {resume_text[:3000]}
+    
+    JOB DESCRIPTION:
+    {job_description[:3000]}
+    
+    Return the response in JSON format with the following structure:
+    {{
+        "missingSkills": [
+            {{
+                "skill": "Skill Name",
+                "importance": "High/Medium/Low",
+                "resources": ["Resource 1", "Resource 2", "Resource 3"]
+            }}
+        ],
+        "advice": "General advice for closing the gap."
+    }}
+    """
+    
+    analysis = call_llm(prompt, temperature=0.5)
+    if not analysis:
+        return jsonify({'error': 'Failed to analyze skills'}), 500
+    
+    try:
+        if "```json" in analysis:
+            analysis = analysis.split("```json")[1].split("```")[0].strip()
+        elif "```" in analysis:
+            analysis = analysis.split("```")[1].split("```")[0].strip()
+        result = json.loads(analysis)
+    except:
+        result = {"raw_analysis": analysis}
+        
+    return jsonify(result)
+
+@app.route('/generate-email', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def generate_email(user_info):
+    data = request.get_json()
+    email_type = data.get('type', 'interview_invite')
+    candidate_name = data.get('candidateName', 'Candidate')
+    job_title = data.get('jobTitle', 'Role')
+    
+    prompt = f"""
+    Write a professional email for a recruiter.
+    Type: {email_type}
+    Candidate Name: {candidate_name}
+    Job Title: {job_title}
+    
+    Keep it polite, professional, and concise.
+    """
+    
+    email_content = call_llm(prompt, temperature=0.7)
+    return jsonify({'email': email_content})
+
+@app.route('/mock-interview', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=20, per_seconds=60)
+def mock_interview(user_info):
+    data = request.get_json()
+    history = data.get('history', [])
+    last_message = data.get('message', '')
+    job_context = data.get('jobContext', '')
+    
+    messages = []
+    if job_context:
+        messages.append(f"Context: You are interviewing the candidate for the following role: {job_context}. Be professional but challenging.")
+    
+    for msg in history[-5:]:
+        role = "User" if msg['sender'] == 'user' else "Interviewer"
+        messages.append(f"{role}: {msg['text']}")
+    
+    messages.append(f"User: {last_message}")
+    messages.append("Interviewer:")
+    
+    prompt = "\\n".join(messages)
+    
+    response = call_llm(prompt, temperature=0.7)
+    return jsonify({'response': response})
 
 
 if __name__ == "__main__":

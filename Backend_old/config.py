@@ -21,7 +21,7 @@ class Config:
 
     COHERE_API_KEY: str | None = os.getenv("COHERE_API_KEY")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "cohere:command-light-nightly")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "cohere:command-r-08-2024")
 
     DATA_DIR: str = os.getenv("DATA_DIR", "data")
 
