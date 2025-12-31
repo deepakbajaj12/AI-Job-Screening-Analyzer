@@ -1121,5 +1121,88 @@ def mock_interview(user_info):
     return jsonify({'response': response})
 
 
+@app.route('/generate-linkedin-profile', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def generate_linkedin_profile(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    resume_file = request.files['resume']
+    resume_text = extract_text_from_pdf(resume_file)
+    
+    prompt = f'''
+    You are an expert career consultant. Create a professional LinkedIn profile based on the resume below.
+    
+    RESUME:
+    {resume_text[:3000]}
+    
+    Return a JSON object with:
+    - headline: A catchy professional headline.
+    - about: A compelling "About" summary (max 300 words).
+    - experience_highlights: A list of 3-5 key achievements formatted for LinkedIn.
+    '''
+    
+    response = call_llm(prompt, temperature=0.7)
+    if not response:
+        return jsonify({'error': 'Failed to generate profile'}), 500
+        
+    try:
+        # Try to parse JSON if the LLM returns it wrapped in code blocks
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
+@app.route('/analyze-mock-interview', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def analyze_mock_interview(user_info):
+    data = request.get_json()
+    history = data.get('history', [])
+    job_context = data.get('jobContext', '')
+    
+    if not history:
+        return jsonify({'error': 'No interview history provided'}), 400
+        
+    transcript = ""
+    for msg in history:
+        role = "Candidate" if msg['sender'] == 'user' else "Interviewer"
+        transcript += f"{role}: {msg['text']}\n"
+        
+    prompt = f'''
+    Analyze the following mock interview transcript for the role of {job_context}.
+    
+    TRANSCRIPT:
+    {transcript}
+    
+    Provide a JSON report with:
+    - score: A score out of 100.
+    - feedback: General feedback on communication and technical accuracy.
+    - strengths: List of strong points.
+    - improvements: List of areas to improve.
+    '''
+    
+    response = call_llm(prompt, temperature=0.5)
+    if not response:
+        return jsonify({'error': 'Failed to analyze interview'}), 500
+        
+    try:
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
+
 if __name__ == "__main__":
     app.run(debug=True)
