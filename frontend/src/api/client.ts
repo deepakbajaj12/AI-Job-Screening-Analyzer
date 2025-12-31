@@ -186,3 +186,29 @@ export async function analyzeMockInterview(token: string | null, payload: { hist
   return res.json()
 }
 
+export async function estimateSalary(token: string | null, payload: { resume: File, jobDescription: string }) {
+  const form = new FormData()
+  form.append('resume', payload.resume)
+  form.append('jobDescription', payload.jobDescription)
+  const res = await fetch(`${API_BASE}/estimate-salary`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form
+  })
+  if (!res.ok) throw new Error(`Salary estimation failed: ${res.status}`)
+  return res.json()
+}
+
+export async function tailorResume(token: string | null, payload: { resume: File, jobDescription: string }) {
+  const form = new FormData()
+  form.append('resume', payload.resume)
+  form.append('jobDescription', payload.jobDescription)
+  const res = await fetch(`${API_BASE}/tailor-resume`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form
+  })
+  if (!res.ok) throw new Error(`Resume tailoring failed: ${res.status}`)
+  return res.json()
+}
+

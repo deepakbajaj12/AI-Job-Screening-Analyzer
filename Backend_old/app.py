@@ -1203,6 +1203,89 @@ def analyze_mock_interview(user_info):
         
     return jsonify(result)
 
+@app.route('/estimate-salary', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def estimate_salary(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    resume_file = request.files['resume']
+    job_description = request.form.get('jobDescription', '')
+    
+    resume_text = extract_text_from_pdf(resume_file)
+    
+    prompt = f'''
+    Based on the candidate's resume and the job description, estimate a competitive salary range and provide negotiation tips.
+    
+    RESUME:
+    {resume_text[:3000]}
+    
+    JOB DESCRIPTION:
+    {job_description[:3000]}
+    
+    Return a JSON object with:
+    - estimated_salary_range: e.g. "$120,000 - $140,000"
+    - market_trends: Brief insight into current market for this role.
+    - negotiation_tips: List of 3-5 specific tips for negotiating this offer based on the candidate's strengths.
+    '''
+    
+    response = call_llm(prompt, temperature=0.5)
+    if not response:
+        return jsonify({'error': 'Failed to estimate salary'}), 500
+        
+    try:
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
+@app.route('/tailor-resume', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def tailor_resume(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    resume_file = request.files['resume']
+    job_description = request.form.get('jobDescription', '')
+    
+    resume_text = extract_text_from_pdf(resume_file)
+    
+    prompt = f'''
+    Rewrite the candidate's resume summary and key experience bullet points to better align with the job description keywords and requirements.
+    
+    RESUME:
+    {resume_text[:3000]}
+    
+    JOB DESCRIPTION:
+    {job_description[:3000]}
+    
+    Return a JSON object with:
+    - rewritten_summary: A new professional summary tailored to the job.
+    - tailored_bullets: A list of objects, each containing "original" (text) and "rewritten" (text) for the top 3 most impactful bullet points to change.
+    '''
+    
+    response = call_llm(prompt, temperature=0.7)
+    if not response:
+        return jsonify({'error': 'Failed to tailor resume'}), 500
+        
+    try:
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
