@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { analyzeRecruiter, generateEmail } from '../api/client'
+import { analyzeRecruiter, generateEmail, generateJobDescription } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 export default function Recruiter() {
@@ -16,6 +16,12 @@ export default function Recruiter() {
   const [jobTitle, setJobTitle] = useState('')
   const [emailType, setEmailType] = useState('interview_invite')
   const [generatedEmail, setGeneratedEmail] = useState('')
+
+  // JD Generator State
+  const [jdTitle, setJdTitle] = useState('')
+  const [jdSkills, setJdSkills] = useState('')
+  const [jdExperience, setJdExperience] = useState('')
+  const [generatedJD, setGeneratedJD] = useState('')
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,6 +45,18 @@ export default function Recruiter() {
       setGeneratedEmail(data.email)
     } catch (err: any) {
       setError(err?.message || 'Email generation failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerateJD = async () => {
+    setLoading(true)
+    try {
+      const data = await generateJobDescription(token, { title: jdTitle, skills: jdSkills, experience: jdExperience })
+      setGeneratedJD(data.job_description)
+    } catch (err: any) {
+      setError(err?.message || 'JD generation failed')
     } finally {
       setLoading(false)
     }
@@ -86,6 +104,28 @@ export default function Recruiter() {
           <div style={{ marginTop: '10px' }}>
             <h4>Generated Email:</h4>
             <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>{generatedEmail}</pre>
+          </div>
+        )}
+      </div>
+
+      <div className='card'>
+        <h3>Job Description Generator</h3>
+        <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+          <label>Job Title
+            <input type='text' value={jdTitle} onChange={e => setJdTitle(e.target.value)} placeholder="e.g. Senior React Developer" />
+          </label>
+          <label>Required Skills
+            <input type='text' value={jdSkills} onChange={e => setJdSkills(e.target.value)} placeholder="e.g. React, TypeScript, Node.js" />
+          </label>
+          <label>Experience Level
+            <input type='text' value={jdExperience} onChange={e => setJdExperience(e.target.value)} placeholder="e.g. 5+ years" />
+          </label>
+          <button className='btn' onClick={handleGenerateJD} disabled={loading}>Generate JD</button>
+        </div>
+        {generatedJD && (
+          <div style={{ marginTop: '10px' }}>
+            <h4>Generated Job Description:</h4>
+            <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>{generatedJD}</pre>
           </div>
         )}
       </div>

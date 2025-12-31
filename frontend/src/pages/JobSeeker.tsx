@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume } from '../api/client'
+import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
 
@@ -10,9 +10,9 @@ export default function JobSeeker() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor'>('analyze')
+  const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career'>('analyze')
 
-  const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor') => {
+  const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career') => {
     setError(null); setResult(null); setActiveTab(action)
     if (!resume) { setError('Please select a resume PDF'); return }
     setLoading(true)
@@ -32,6 +32,8 @@ export default function JobSeeker() {
         data = await estimateSalary(token, { resume, jobDescription })
       } else if (action === 'tailor') {
         data = await tailorResume(token, { resume, jobDescription })
+      } else if (action === 'career') {
+        data = await generateCareerPath(token, { resume })
       }
       setResult(data)
     } catch (err: any) {
@@ -60,6 +62,7 @@ export default function JobSeeker() {
           <button className="btn" onClick={() => handleAction('linkedin')} disabled={loading}>LinkedIn Profile</button>
           <button className="btn" onClick={() => handleAction('salary')} disabled={loading}>Salary Estimator</button>
           <button className="btn" onClick={() => handleAction('tailor')} disabled={loading}>Tailor Resume</button>
+          <button className="btn" onClick={() => handleAction('career')} disabled={loading}>Career Path</button>
           <Link to="/mock-interview" className="btn" style={{ textDecoration: 'none', textAlign: 'center' }}>Mock Interview</Link>
         </div>
       </div>
@@ -69,7 +72,7 @@ export default function JobSeeker() {
       
       {result && (
         <div className="card">
-          <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : 'Skill Gap'}</h3>
+          <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : 'Skill Gap'}</h3>
           
           {activeTab === 'analyze' && (
             result.formattedReport ? <pre className="report">{result.formattedReport}</pre> : <pre>{JSON.stringify(result, null, 2)}</pre>
@@ -120,6 +123,21 @@ export default function JobSeeker() {
                   <p><strong>Rewritten:</strong> <span style={{ color: '#007bff' }}>{item.rewritten}</span></p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {activeTab === 'career' && (
+            <div className="report">
+              <h4>Current Level: {result.current_level}</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
+                {result.career_roadmap?.map((step: any, i: number) => (
+                  <div key={i} style={{ borderLeft: '3px solid #007bff', paddingLeft: '15px' }}>
+                    <h5 style={{ margin: '0 0 5px 0' }}>{step.role}</h5>
+                    <p style={{ margin: 0, color: '#666', fontSize: '0.9em' }}>Timeline: {step.timeline}</p>
+                    <p style={{ margin: '5px 0 0 0' }}><strong>Skills Needed:</strong> {step.skills_needed}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

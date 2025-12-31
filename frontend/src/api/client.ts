@@ -212,3 +212,28 @@ export async function tailorResume(token: string | null, payload: { resume: File
   return res.json()
 }
 
+export async function generateCareerPath(token: string | null, payload: { resume: File }) {
+  const form = new FormData()
+  form.append('resume', payload.resume)
+  const res = await fetch(`${API_BASE}/generate-career-path`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form
+  })
+  if (!res.ok) throw new Error(`Career path generation failed: ${res.status}`)
+  return res.json()
+}
+
+export async function generateJobDescription(token: string | null, payload: { title: string, skills: string, experience: string }) {
+  const res = await fetch(`${API_BASE}/generate-job-description`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`JD generation failed: ${res.status}`)
+  return res.json()
+}
+

@@ -1286,6 +1286,80 @@ def tailor_resume(user_info):
         
     return jsonify(result)
 
+@app.route('/generate-career-path', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def generate_career_path(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    resume_file = request.files['resume']
+    resume_text = extract_text_from_pdf(resume_file)
+    
+    prompt = f'''
+    Analyze the candidate's resume and suggest a long-term career path roadmap.
+    
+    RESUME:
+    {resume_text[:3000]}
+    
+    Return a JSON object with:
+    - current_level: Estimated current seniority level (e.g., Junior, Mid, Senior).
+    - career_roadmap: A list of 3-4 future roles/milestones. Each milestone should have:
+        - role: Job title.
+        - timeline: Estimated years to reach this.
+        - skills_needed: Key skills to acquire.
+    '''
+    
+    response = call_llm(prompt, temperature=0.7)
+    if not response:
+        return jsonify({'error': 'Failed to generate career path'}), 500
+        
+    try:
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
+@app.route('/generate-job-description', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def generate_job_description(user_info):
+    data = request.get_json()
+    title = data.get('title', '')
+    skills = data.get('skills', '')
+    experience = data.get('experience', '')
+    
+    prompt = f'''
+    Write a professional and attractive job description for the following role:
+    
+    Job Title: {title}
+    Required Skills: {skills}
+    Experience Level: {experience}
+    
+    Return a JSON object with:
+    - job_description: The full formatted job description text.
+    '''
+    
+    response = call_llm(prompt, temperature=0.7)
+    if not response:
+        return jsonify({'error': 'Failed to generate JD'}), 500
+        
+    try:
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
