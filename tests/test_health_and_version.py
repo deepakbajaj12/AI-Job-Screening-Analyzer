@@ -1,26 +1,8 @@
 import os
 import sys
 import pytest
-import importlib.util
 
-# ===== DEFENSIVE: Ensure project root is in sys.path BEFORE any imports =====
-# This is critical insurance in case conftest.py doesn't run first in CI
-# Use realpath to handle symlinks and relative paths correctly
-test_file = os.path.realpath(__file__)
-tests_dir = os.path.dirname(test_file)
-_project_root = os.path.dirname(tests_dir)
-
-# Insert at beginning if not already there (first occurrence only)
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-else:
-    # Move it to the front if it's already in the path
-    sys.path.remove(_project_root)
-    sys.path.insert(0, _project_root)
-
-os.chdir(_project_root)
-
-# Ensure dev bypass for tests
+# Ensure environment is set
 os.environ.setdefault("DEV_BYPASS_AUTH", "1")
 os.environ.setdefault("APP_VERSION", "test-version")
 os.environ.setdefault("FIREBASE_CREDENTIAL_PATH", "Backend_old/firebase-service-account.json")
@@ -28,13 +10,16 @@ os.environ.setdefault("FIREBASE_CREDENTIAL_PATH", "Backend_old/firebase-service-
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_app_module():
-    """Load the Flask app module - this fixture runs before any tests"""
+    """Load the Flask app module - lazy import happens here after conftest setup"""
+    import importlib.util
+    
     # Load Backend_old.app module
     spec = importlib.util.find_spec("Backend_old.app")
     if spec is None:
+        import sys as sys_debug
         raise ImportError(
             f"Cannot find Backend_old.app module.\n"
-            f"Project root in sys.path: {sys.path}\n"
+            f"sys.path: {sys_debug.path}\n"
             f"Current directory: {os.getcwd()}"
         )
     app_module = importlib.util.module_from_spec(spec)

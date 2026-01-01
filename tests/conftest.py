@@ -31,7 +31,7 @@ os.environ["FIREBASE_CREDENTIAL_PATH"] = "Backend_old/firebase-service-account.j
 
 def pytest_configure(config):
     """
-    Earliest pytest hook - runs before test collection.
+    Pytest configuration hook - runs before test collection.
     Ensures sys.path is configured before pytest tries to collect test modules.
     """
     global project_root
@@ -39,4 +39,14 @@ def pytest_configure(config):
     while project_root in sys.path:
         sys.path.remove(project_root)
     sys.path.insert(0, project_root)
+    
+    # Print debug info to help diagnose CI issues
+    import sys as sys_module
+    if os.environ.get('DEV_BYPASS_AUTH') == '1':
+        print(f"\n=== pytest_configure hook running ===")
+        print(f"Project root: {project_root}")
+        print(f"sys.path[0]: {sys_module.path[0]}")
+        print(f"cwd: {os.getcwd()}")
+        print(f"Backend_old exists: {os.path.exists(os.path.join(project_root, 'Backend_old'))}")
+        print(f"===================================\n")
 
