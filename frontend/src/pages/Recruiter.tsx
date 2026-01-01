@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { analyzeRecruiter, generateEmail, generateJobDescription } from '../api/client'
+import { analyzeRecruiter, generateEmail, generateJobDescription, generateBooleanSearch } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 export default function Recruiter() {
@@ -22,6 +22,10 @@ export default function Recruiter() {
   const [jdSkills, setJdSkills] = useState('')
   const [jdExperience, setJdExperience] = useState('')
   const [generatedJD, setGeneratedJD] = useState('')
+
+  // Boolean Search State
+  const [searchJD, setSearchJD] = useState('')
+  const [generatedSearch, setGeneratedSearch] = useState<any>(null)
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,6 +66,19 @@ export default function Recruiter() {
     }
   }
 
+  const handleGenerateSearch = async () => {
+    if (!searchJD.trim()) return
+    setLoading(true)
+    try {
+      const data = await generateBooleanSearch(token, { jobDescription: searchJD })
+      setGeneratedSearch(data)
+    } catch (err: any) {
+      setError(err?.message || 'Search generation failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <section>
       <h2>Recruiter Tools</h2>
@@ -80,6 +97,32 @@ export default function Recruiter() {
           </label>
           <button className='btn' disabled={loading}>{loading ? 'Analyzing' : 'Analyze'}</button>
         </form>
+      </div>
+
+      <div className='card'>
+        <h3>Smart Boolean Search Generator</h3>
+        <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+          <label>Job Description / Requirements
+            <textarea 
+              rows={4} 
+              value={searchJD} 
+              onChange={e => setSearchJD(e.target.value)} 
+              placeholder="Paste job description or key requirements here..." 
+            />
+          </label>
+          <button className='btn' onClick={handleGenerateSearch} disabled={loading}>Generate Boolean String</button>
+        </div>
+        {generatedSearch && (
+          <div style={{ marginTop: '10px' }}>
+            <h4>Boolean String:</h4>
+            <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '5px', fontFamily: 'monospace', border: '1px solid #ddd' }}>
+              {generatedSearch.boolean_string}
+            </div>
+            <p style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
+              <strong>Strategy:</strong> {generatedSearch.explanation}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className='card'>

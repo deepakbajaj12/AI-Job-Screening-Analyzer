@@ -249,3 +249,16 @@ export async function resumeHealthCheck(token: string | null, payload: { resume:
   return res.json()
 }
 
+export async function generateBooleanSearch(token: string | null, payload: { jobDescription: string }) {
+  const res = await fetch(`${API_BASE}/generate-boolean-search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`Boolean search generation failed: ${res.status}`)
+  return res.json()
+}
+

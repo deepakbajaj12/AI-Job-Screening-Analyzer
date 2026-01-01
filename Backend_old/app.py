@@ -1418,6 +1418,40 @@ def resume_health_check(user_info):
         
     return jsonify(result)
 
+@app.route('/generate-boolean-search', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def generate_boolean_search(user_info):
+    data = request.get_json()
+    job_description = data.get('jobDescription', '')
+    
+    prompt = f'''
+    Generate a highly effective Boolean search string for finding candidates on LinkedIn or Google for the following job description.
+    Also provide a brief explanation of the search strategy.
+    
+    JOB DESCRIPTION:
+    {job_description[:3000]}
+    
+    Return a JSON object with:
+    - boolean_string: The search string (e.g., "(Java OR Kotlin) AND (Android) AND (Senior OR Lead)").
+    - explanation: Why these keywords and operators were chosen.
+    '''
+    
+    response = call_llm(prompt, temperature=0.4)
+    if not response:
+        return jsonify({'error': 'Failed to generate boolean search'}), 500
+        
+    try:
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
