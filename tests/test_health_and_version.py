@@ -5,21 +5,27 @@ import pytest
 from importlib import import_module
 
 
+# Determine project root - this file is in tests/, so go up one level
+test_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(test_dir)
+
+# Ensure project root is first in sys.path for module resolution
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Ensure current working directory is available (for CI environments)
+cwd = os.getcwd()
+if cwd not in sys.path:
+    sys.path.insert(0, cwd)
+
+# Change to project root to ensure relative paths work correctly
+original_cwd = os.getcwd()
+os.chdir(project_root)
+
 # Ensure dev bypass for tests
 os.environ.setdefault("DEV_BYPASS_AUTH", "1")
 os.environ.setdefault("APP_VERSION", "test-version")
 os.environ.setdefault("FIREBASE_CREDENTIAL_PATH", "Backend_old/firebase-service-account.json")
-
-# Add project root to sys.path for module resolution
-# Handle both local and CI environments
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# Also ensure current directory is in path for pytest execution from any location
-cwd = os.getcwd()
-if cwd not in sys.path:
-    sys.path.insert(0, cwd)
 
 # Import the app dynamically
 app_module = import_module("Backend_old.app")
