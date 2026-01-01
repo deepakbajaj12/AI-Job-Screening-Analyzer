@@ -1,18 +1,19 @@
 import sys
 import os
 
-# Add the project root to sys.path so that Backend_old and tests can be imported
-# conftest.py is in the tests directory, so go up one level to get the project root
+# ===== CRITICAL: Setup sys.path FIRST before anything else =====
+# This must run before pytest collects any test modules
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Ensure project root is FIRST in sys.path (before anything else)
-if project_root in sys.path:
+# Force project root to be first in sys.path
+while project_root in sys.path:
     sys.path.remove(project_root)
 sys.path.insert(0, project_root)
 
-# Also change to project root for relative imports to work
+# Change to project root immediately
 os.chdir(project_root)
 
-# Set environment variables for Firebase
-os.environ.setdefault("DEV_BYPASS_AUTH", "1")
-os.environ.setdefault("FIREBASE_CREDENTIAL_PATH", "Backend_old/firebase-service-account.json")
+# Set environment variables BEFORE anything imports the app
+os.environ["DEV_BYPASS_AUTH"] = "1"
+os.environ["FIREBASE_CREDENTIAL_PATH"] = "Backend_old/firebase-service-account.json"
+
