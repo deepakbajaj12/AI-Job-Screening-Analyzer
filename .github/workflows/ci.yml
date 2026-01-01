@@ -20,12 +20,28 @@ jobs:
           python -m venv venv
           . venv/bin/activate
           pip install -r Backend_old/requirements.txt
+      - name: Verify test file and conftest files exist
+        run: |
+          echo "=== Checking test files ==="
+          echo "conftest.py (root):"
+          head -5 conftest.py || echo "NOT FOUND"
+          echo ""
+          echo "tests/conftest.py:"
+          head -5 tests/conftest.py || echo "NOT FOUND"
+          echo ""
+          echo "tests/test_health_and_version.py:"
+          head -20 tests/test_health_and_version.py || echo "NOT FOUND"
       - name: Run tests
         env:
           DEV_BYPASS_AUTH: '1'
           PYTHONPATH: ${{ github.workspace }}
         run: |
           . venv/bin/activate
+          echo "Python path: $(which python)"
+          echo "Python version: $(python --version)"
+          echo "Current dir: $(pwd)"
+          echo "sys.path will include: $PYTHONPATH"
+          echo "Running: pytest tests/ -q"
           pytest tests/ -q
 
   backend-node:
