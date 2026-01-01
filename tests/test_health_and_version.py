@@ -10,22 +10,35 @@ os.environ.setdefault("DEV_BYPASS_AUTH", "1")
 os.environ.setdefault("APP_VERSION", "test-version")
 os.environ.setdefault("FIREBASE_CREDENTIAL_PATH", "Backend_old/firebase-service-account.json")
 
-# Load Backend_old.app module
-spec = importlib.util.find_spec("Backend_old.app")
-if spec is None:
-    raise ImportError(
-        f"Cannot find Backend_old.app module.\n"
-        f"Project root in sys.path: {sys.path}\n"
-        f"Current directory: {os.getcwd()}"
-    )
-app_module = importlib.util.module_from_spec(spec)
-sys.modules["Backend_old.app"] = app_module
-spec.loader.exec_module(app_module)
 
-app = app_module.app
+@pytest.fixture(scope="session", autouse=True)
+def setup_app_module():
+    """Load the Flask app module - this fixture runs before any tests"""
+    # Load Backend_old.app module
+    spec = importlib.util.find_spec("Backend_old.app")
+    if spec is None:
+        raise ImportError(
+            f"Cannot find Backend_old.app module.\n"
+            f"Project root in sys.path: {sys.path}\n"
+            f"Current directory: {os.getcwd()}"
+        )
+    app_module = importlib.util.module_from_spec(spec)
+    sys.modules["Backend_old.app"] = app_module
+    spec.loader.exec_module(app_module)
+    return app_module
+
+
+# This will be set by the setup_app_module fixture
+app = None
+
+def _load_app():
+    """Get the app from sys.modules after fixture loads it"""
+    return sys.modules.get("Backend_old.app").app
 
 @pytest.fixture()
-def client():
+def client(setup_app_module):
+    """Create a test client for the Flask app"""
+    app = _load_app()
     app.config.update({
         "TESTING": True
     })
