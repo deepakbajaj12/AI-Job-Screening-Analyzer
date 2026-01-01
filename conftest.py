@@ -63,10 +63,31 @@ def root_setup():
 
 
 def pytest_configure(config):
-    """Early pytest hook to ensure setup is complete before collection."""
+    """Pytest configuration hook - earliest pytest hook."""
     print("\n" + "=" * 70)
-    print("pytest_configure HOOK (ROOT)")
+    print("pytest_configure HOOK (ROOT) - RUNNING")
     print("=" * 70)
+    
+    # CRITICAL: Re-ensure sys.path is correct
+    global project_root
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    else:
+        sys.path.remove(project_root)
+        sys.path.insert(0, project_root)
+    
+    os.chdir(project_root)
+    
     print(f"  sys.path[0]: {sys.path[0]}")
     print(f"  cwd: {os.getcwd()}")
+    print("=" * 70 + "\n")
+
+
+def pytest_collection(session):
+    """Hook that runs during test collection - very early."""
+    print("\n" + "=" * 70)
+    print("pytest_collection HOOK (ROOT) - RUNNING BEFORE COLLECTION")
+    print("=" * 70)
+    print(f"  sys.path[0]: {sys.path[0]}")
+    print(f"  Backend_old in sys.path: {project_root in sys.path}")
     print("=" * 70 + "\n")
