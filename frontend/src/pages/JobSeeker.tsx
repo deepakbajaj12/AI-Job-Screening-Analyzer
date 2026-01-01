@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath } from '../api/client'
+import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
 
@@ -10,9 +10,9 @@ export default function JobSeeker() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career'>('analyze')
+  const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health'>('analyze')
 
-  const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career') => {
+  const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health') => {
     setError(null); setResult(null); setActiveTab(action)
     if (!resume) { setError('Please select a resume PDF'); return }
     setLoading(true)
@@ -34,6 +34,8 @@ export default function JobSeeker() {
         data = await tailorResume(token, { resume, jobDescription })
       } else if (action === 'career') {
         data = await generateCareerPath(token, { resume })
+      } else if (action === 'health') {
+        data = await resumeHealthCheck(token, { resume })
       }
       setResult(data)
     } catch (err: any) {
@@ -63,6 +65,7 @@ export default function JobSeeker() {
           <button className="btn" onClick={() => handleAction('salary')} disabled={loading}>Salary Estimator</button>
           <button className="btn" onClick={() => handleAction('tailor')} disabled={loading}>Tailor Resume</button>
           <button className="btn" onClick={() => handleAction('career')} disabled={loading}>Career Path</button>
+          <button className="btn" onClick={() => handleAction('health')} disabled={loading}>Resume Health Check</button>
           <Link to="/mock-interview" className="btn" style={{ textDecoration: 'none', textAlign: 'center' }}>Mock Interview</Link>
         </div>
       </div>
@@ -72,7 +75,7 @@ export default function JobSeeker() {
       
       {result && (
         <div className="card">
-          <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : 'Skill Gap'}</h3>
+          <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : activeTab === 'health' ? 'Resume Health Check' : 'Skill Gap'}</h3>
           
           {activeTab === 'analyze' && (
             result.formattedReport ? <pre className="report">{result.formattedReport}</pre> : <pre>{JSON.stringify(result, null, 2)}</pre>
@@ -138,6 +141,49 @@ export default function JobSeeker() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'health' && (
+            <div className="report">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
+                <div style={{ 
+                  width: '80px', height: '80px', borderRadius: '50%', 
+                  background: result.score >= 80 ? '#28a745' : result.score >= 60 ? '#ffc107' : '#dc3545',
+                  color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '2em', fontWeight: 'bold'
+                }}>
+                  {result.score}
+                </div>
+                <div>
+                  <h4>Overall Health</h4>
+                  <p>{result.summary}</p>
+                </div>
+              </div>
+              
+              <h4>Detailed Checks</h4>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {result.checks?.map((check: any, i: number) => (
+                  <div key={i} style={{ 
+                    padding: '10px', border: '1px solid #eee', borderRadius: '5px',
+                    borderLeft: `5px solid ${check.status === 'pass' ? '#28a745' : check.status === 'warning' ? '#ffc107' : '#dc3545'}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <strong>{check.category}</strong>
+                      <span style={{ 
+                        textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 'bold',
+                        color: check.status === 'pass' ? '#28a745' : check.status === 'warning' ? '#ffc107' : '#dc3545'
+                      }}>{check.status}</span>
+                    </div>
+                    <p style={{ margin: '5px 0 0 0', fontSize: '0.9em' }}>{check.feedback}</p>
+                  </div>
+                ))}
+              </div>
+
+              <h4>Actionable Improvements</h4>
+              <ul>
+                {result.improvements?.map((imp: string, i: number) => <li key={i}>{imp}</li>)}
+              </ul>
             </div>
           )}
 

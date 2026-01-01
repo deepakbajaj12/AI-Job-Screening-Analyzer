@@ -237,3 +237,15 @@ export async function generateJobDescription(token: string | null, payload: { ti
   return res.json()
 }
 
+export async function resumeHealthCheck(token: string | null, payload: { resume: File }) {
+  const form = new FormData()
+  form.append('resume', payload.resume)
+  const res = await fetch(`${API_BASE}/resume-health-check`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form
+  })
+  if (!res.ok) throw new Error(`Resume health check failed: ${res.status}`)
+  return res.json()
+}
+

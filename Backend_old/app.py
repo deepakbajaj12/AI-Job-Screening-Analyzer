@@ -1360,6 +1360,64 @@ def generate_job_description(user_info):
         
     return jsonify(result)
 
+@app.route('/resume-health-check', methods=['POST'])
+@auth_required
+@rate_limit(max_requests=10, per_seconds=60)
+def resume_health_check(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+    
+    file = request.files['resume']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    try:
+        with pdfplumber.open(file) as pdf:
+            text = ""
+            for page in pdf.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
+    except Exception as e:
+        logger.error(f"pdf.extract_error error={e}")
+        return jsonify({'error': 'Failed to extract text from PDF'}), 500
+
+    prompt = f'''
+    Perform a comprehensive health check on this resume. Analyze it for:
+    1. Formatting & Structure (clarity, section headers, length)
+    2. Impact & Quantifiable Results (use of numbers, metrics, achievements vs duties)
+    3. Action Verbs (strength of language)
+    4. Contact Information (completeness)
+    5. ATS Compatibility (keyword density, standard sections)
+    
+    RESUME TEXT:
+    {text[:4000]}
+    
+    Return a JSON object with:
+    - score: Overall health score (0-100).
+    - summary: A brief summary of the resume's health.
+    - checks: A list of objects, each with:
+        - category: (e.g., "Impact", "Formatting", "Action Verbs")
+        - status: "pass", "warning", or "fail"
+        - feedback: Specific feedback for this category.
+    - improvements: A list of specific actionable improvements.
+    '''
+    
+    response = call_llm(prompt, temperature=0.5)
+    if not response:
+        return jsonify({'error': 'Failed to analyze resume health'}), 500
+        
+    try:
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        result = json.loads(response)
+    except:
+        result = {"raw_response": response}
+        
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
