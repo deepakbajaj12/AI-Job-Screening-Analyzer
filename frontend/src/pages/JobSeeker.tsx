@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck } from '../api/client'
+import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
 
@@ -10,10 +10,22 @@ export default function JobSeeker() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health'>('analyze')
+  const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking'>('analyze')
 
-  const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health') => {
+  // Networking State
+  const [netRole, setNetRole] = useState('')
+  const [netCompany, setNetCompany] = useState('')
+  const [netRecipient, setNetRecipient] = useState('')
+  const [netType, setNetType] = useState('linkedin_connect')
+
+  const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking') => {
     setError(null); setResult(null); setActiveTab(action)
+    
+    if (action === 'networking') {
+      // No resume needed for networking, but we need form inputs
+      return
+    }
+
     if (!resume) { setError('Please select a resume PDF'); return }
     setLoading(true)
     try {
@@ -45,6 +57,19 @@ export default function JobSeeker() {
     }
   }
 
+  const handleNetworkingSubmit = async () => {
+    if (!netRole || !netCompany) { setError('Please provide target role and company'); return }
+    setLoading(true)
+    try {
+      const data = await generateNetworkingMessage(token, { targetRole: netRole, company: netCompany, recipientName: netRecipient, messageType: netType })
+      setResult(data)
+    } catch (err: any) {
+      setError(err?.message || 'Networking message generation failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <section>
       <h2>Job Seeker Tools</h2>
@@ -66,14 +91,40 @@ export default function JobSeeker() {
           <button className="btn" onClick={() => handleAction('tailor')} disabled={loading}>Tailor Resume</button>
           <button className="btn" onClick={() => handleAction('career')} disabled={loading}>Career Path</button>
           <button className="btn" onClick={() => handleAction('health')} disabled={loading}>Resume Health Check</button>
+          <button className="btn" onClick={() => handleAction('networking')} disabled={loading}>Networking Assistant</button>
           <Link to="/mock-interview" className="btn" style={{ textDecoration: 'none', textAlign: 'center' }}>Mock Interview</Link>
         </div>
       </div>
 
+      {activeTab === 'networking' && (
+        <div className="card">
+          <h3>Networking Message Generator</h3>
+          <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+            <label>Target Role
+              <input type="text" value={netRole} onChange={e => setNetRole(e.target.value)} placeholder="e.g. Product Manager" />
+            </label>
+            <label>Target Company
+              <input type="text" value={netCompany} onChange={e => setNetCompany(e.target.value)} placeholder="e.g. Google" />
+            </label>
+            <label>Recipient Name (Optional)
+              <input type="text" value={netRecipient} onChange={e => setNetRecipient(e.target.value)} placeholder="e.g. Jane Doe" />
+            </label>
+            <label>Message Type
+              <select value={netType} onChange={e => setNetType(e.target.value)}>
+                <option value="linkedin_connect">LinkedIn Connection Request</option>
+                <option value="cold_email">Cold Email</option>
+                <option value="alumni_reachout">Alumni Reachout</option>
+              </select>
+            </label>
+            <button className="btn" onClick={handleNetworkingSubmit} disabled={loading}>Generate Message</button>
+          </div>
+        </div>
+      )}
+
       {loading && <div className="loading">Processing...</div>}
       {error && <div className="error">{error}</div>}
       
-      {result && (
+      {result && activeTab !== 'networking' && (
         <div className="card">
           <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : activeTab === 'health' ? 'Resume Health Check' : 'Skill Gap'}</h3>
           
@@ -208,6 +259,28 @@ export default function JobSeeker() {
               ) : (
                 <pre>{JSON.stringify(result, null, 2)}</pre>
               )}
+            </div>
+          )}
+        </div>
+      )}
+      {result && activeTab === 'networking' && (
+        <div className="card">
+          <h3>Generated Message</h3>
+          {result.subject && <p><strong>Subject:</strong> {result.subject}</p>}
+          <div className="report" style={{ whiteSpace: 'pre-wrap', background: '#f8f9fa', padding: '15px', borderRadius: '5px', border: '1px solid #ddd' }}>
+            {result.message}
+          </div>
+          <button 
+            className="btn" 
+            style={{ marginTop: '10px', background: '#6c757d' }}
+            onClick={() => navigator.clipboard.writeText(result.message)}
+          >
+            Copy to Clipboard
+          </button>
+          
+          {result.tips && (
+            <div style={{ marginTop: '20px', background: '#e9ecef', padding: '10px', borderRadius: '5px' }}>
+              <strong>💡 Tips:</strong> {result.tips}
             </div>
           )}
         </div>

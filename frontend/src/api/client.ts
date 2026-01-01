@@ -262,3 +262,16 @@ export async function generateBooleanSearch(token: string | null, payload: { job
   return res.json()
 }
 
+export async function generateNetworkingMessage(token: string | null, payload: { targetRole: string, company: string, recipientName: string, messageType: string }) {
+  const res = await fetch(`${API_BASE}/generate-networking-message`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`Networking message generation failed: ${res.status}`)
+  return res.json()
+}
+
