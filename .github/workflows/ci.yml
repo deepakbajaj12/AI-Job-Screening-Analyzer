@@ -23,9 +23,10 @@ jobs:
       - name: Run tests
         env:
           DEV_BYPASS_AUTH: '1'
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           . venv/bin/activate
-          pytest -q
+          pytest tests/ -q
 
   backend-node:
     runs-on: ubuntu-latest
