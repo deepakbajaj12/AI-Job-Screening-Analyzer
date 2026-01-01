@@ -6,7 +6,7 @@ import sys
 import os
 
 print("=" * 70)
-print("ROOT CONFTEST.PY EXECUTING")
+print("ROOT CONFTEST.PY EXECUTING AT MODULE LEVEL")
 print("=" * 70)
 
 # Get the project root (directory containing this file)
@@ -42,8 +42,24 @@ if not backend_exists:
     raise RuntimeError(f"CRITICAL: Backend_old not found at {project_root}")
 
 print("=" * 70)
-print("ROOT CONFTEST.PY SETUP COMPLETE")
+print("ROOT CONFTEST.PY MODULE-LEVEL SETUP COMPLETE")
 print("=" * 70)
+
+
+import pytest
+
+@pytest.fixture(scope="session", autouse=True)
+def root_setup():
+    """Session-scoped autouse fixture to ensure setup runs before any tests."""
+    print("\nROOT_SETUP FIXTURE RUNNING")
+    # Verify Backend_old can be found via importlib
+    import importlib.util
+    spec = importlib.util.find_spec("Backend_old")
+    if spec is None:
+        raise RuntimeError(f"Backend_old not found in sys.path: {sys.path}")
+    print(f"Backend_old found at: {spec.origin}")
+    yield
+    print("ROOT_SETUP FIXTURE COMPLETE\n")
 
 
 def pytest_configure(config):
