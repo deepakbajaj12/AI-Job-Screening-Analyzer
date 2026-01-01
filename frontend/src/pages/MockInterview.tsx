@@ -10,6 +10,34 @@ export default function MockInterview() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<any>(null)
+  const [isListening, setIsListening] = useState(false)
+
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in this browser. Try Chrome.')
+      return
+    }
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    const recognition = new SpeechRecognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+
+    recognition.onstart = () => setIsListening(true)
+    recognition.onend = () => setIsListening(false)
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      setMessage((prev) => prev + (prev ? ' ' : '') + transcript)
+    }
+    recognition.start()
+  }
+
+  const speak = (text: string) => {
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    window.speechSynthesis.speak(utterance)
+  }
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,15 +94,44 @@ export default function MockInterview() {
             color: msg.sender === 'user' ? 'white' : 'black',
             padding: '8px 12px',
             borderRadius: '12px',
-            maxWidth: '70%'
+            maxWidth: '70%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px'
           }}>
-            <strong>{msg.sender === 'user' ? 'You' : 'Interviewer'}:</strong> {msg.text}
+            <div><strong>{msg.sender === 'user' ? 'You' : 'Interviewer'}:</strong> {msg.text}</div>
+            {msg.sender === 'ai' && (
+              <button 
+                onClick={() => speak(msg.text)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '1.2em',
+                  alignSelf: 'flex-start',
+                  padding: 0
+                }}
+                title="Read aloud"
+              >
+                🔊
+              </button>
+            )}
           </div>
         ))}
         {loading && <div style={{ alignSelf: 'flex-start', color: '#666' }}>Interviewer is typing...</div>}
       </div>
 
       <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+        <button 
+          type="button" 
+          className="btn" 
+          onClick={startListening} 
+          disabled={loading || isListening}
+          style={{ background: isListening ? '#dc3545' : '#17a2b8' }}
+          title="Speak answer"
+        >
+          {isListening ? '🛑' : '🎤'}
+        </button>
         <input 
           type="text" 
           value={message} 
