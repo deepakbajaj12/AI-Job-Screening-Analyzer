@@ -5,9 +5,19 @@ import importlib.util
 
 # ===== DEFENSIVE: Ensure project root is in sys.path BEFORE any imports =====
 # This is critical insurance in case conftest.py doesn't run first in CI
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Use realpath to handle symlinks and relative paths correctly
+test_file = os.path.realpath(__file__)
+tests_dir = os.path.dirname(test_file)
+_project_root = os.path.dirname(tests_dir)
+
+# Insert at beginning if not already there (first occurrence only)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
+else:
+    # Move it to the front if it's already in the path
+    sys.path.remove(_project_root)
+    sys.path.insert(0, _project_root)
+
 os.chdir(_project_root)
 
 # Ensure dev bypass for tests

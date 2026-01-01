@@ -3,7 +3,18 @@ import os
 
 # ===== ABSOLUTE CRITICAL: Setup sys.path BEFORE anything else =====
 # This code runs at conftest.py import time (earliest possible)
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Use os.path.realpath() for absolute path resolution, not relying on cwd
+conftest_file = os.path.realpath(__file__)
+conftest_dir = os.path.dirname(conftest_file)  # /path/to/tests
+project_root = os.path.dirname(conftest_dir)   # /path/to/project
+
+# Verify project root is correct
+if not os.path.exists(os.path.join(project_root, 'Backend_old')):
+    raise RuntimeError(
+        f"Backend_old not found at {project_root}. "
+        f"conftest.py at: {conftest_file}, "
+        f"calculated project_root: {project_root}"
+    )
 
 # Force project root to be first in sys.path
 while project_root in sys.path:
