@@ -1,9 +1,14 @@
-
 import os
 import sys
 import pytest
 import importlib.util
 
+# ===== DEFENSIVE: Ensure project root is in sys.path BEFORE any imports =====
+# This is critical insurance in case conftest.py doesn't run first in CI
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+os.chdir(_project_root)
 
 # Ensure dev bypass for tests
 os.environ.setdefault("DEV_BYPASS_AUTH", "1")
