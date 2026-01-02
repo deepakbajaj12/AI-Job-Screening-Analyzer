@@ -67,11 +67,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Clean and install dependencies
+      - name: Install dependencies
         run: |
           cd frontend
-          rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
+          npm ci
       - name: Run tests
         run: |
           cd frontend
