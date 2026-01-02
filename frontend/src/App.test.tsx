@@ -8,7 +8,7 @@ it('renders navigation links', () => {
       <App />
     </BrowserRouter>
   )
-  expect(screen.getByText(/AI Job Screening/i)).toBeInTheDocument()
-  expect(screen.getByText(/Job Seeker/i)).toBeInTheDocument()
-  expect(screen.getByText(/Recruiter/i)).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /AI Job Screening/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Job Seeker/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Recruiter/i })).toBeInTheDocument()
 })
