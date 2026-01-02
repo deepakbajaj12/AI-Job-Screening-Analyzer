@@ -70,9 +70,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd frontend
-          npm cache clean --force
-          rm -rf node_modules
-          npm install --legacy-peer-deps
+          npm ci
       - name: Run tests
         run: |
           cd frontend
