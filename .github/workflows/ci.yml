@@ -71,11 +71,14 @@ jobs:
         with:
           node-version: '20'
       - name: Install dependencies
-        run: npm ci
-      - name: Install peer dependencies
         run: |
-          npm install --no-save @testing-library/dom@10.4.1
-          ls -la node_modules/@testing-library/ | grep dom
+          npm ci
+          npm install --force @testing-library/dom@10.4.1
+      - name: Verify peer dependencies
+        run: |
+          echo "Checking for @testing-library/dom..."
+          ls -la node_modules/@testing-library/ || echo "Directory not found"
+          test -d node_modules/@testing-library/dom && echo "✓ @testing-library/dom is installed" || echo "✗ @testing-library/dom is NOT installed"
       - name: Run tests
         run: npm test
       - name: Build
