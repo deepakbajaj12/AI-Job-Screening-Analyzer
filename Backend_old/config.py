@@ -16,7 +16,7 @@ class Config:
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
 
     FIREBASE_CREDENTIAL_PATH: str = os.getenv(
-        "FIREBASE_CREDENTIAL_PATH", "firebase-service-account.json"
+        "FIREBASE_CREDENTIAL_PATH", "Backend_old/firebase-service-account.json"
     )
 
     COHERE_API_KEY: str | None = os.getenv("COHERE_API_KEY")
