@@ -13,4 +13,4 @@ COPY Backend_old ./Backend_old
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
-CMD ["python", "Backend_old/app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "Backend_old.app:app"]
