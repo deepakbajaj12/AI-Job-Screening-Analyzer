@@ -62,6 +62,14 @@ def configure_logging() -> None:
                 "logger": record.name,
                 "message": record.getMessage(),
             }
+            # Inject Correlation ID if available in Flask context
+            try:
+                from flask import has_request_context, g
+                if has_request_context() and hasattr(g, "request_id"):
+                     payload["requestId"] = g.request_id
+            except ImportError:
+                pass
+
             if record.exc_info:
                 payload["exception"] = self.formatException(record.exc_info)
             return json.dumps(payload, ensure_ascii=False)

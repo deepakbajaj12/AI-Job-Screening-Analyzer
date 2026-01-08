@@ -1,11 +1,12 @@
 import os
 import json
 import re
+import uuid
 import time
 import threading
 from datetime import datetime
 from collections import defaultdict
-from flask import Flask, request, jsonify, url_for
+from flask import Flask, request, jsonify, url_for, g
 from flask_cors import CORS
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
@@ -651,8 +652,20 @@ def auth_required(fn):
 def index():
     return "AI Job Screening Resume Analyzer Backend Running."
 
+@app.before_request
+def start_request_tracing():
+    # 1. Capture or generate Request ID
+    req_id = request.headers.get("X-Request-ID")
+    if not req_id:
+        req_id = str(uuid.uuid4())
+    g.request_id = req_id
+
 @app.after_request
 def set_security_headers(response):
+    # 0. Append Request ID to response
+    if hasattr(g, "request_id"):
+        response.headers["X-Request-ID"] = g.request_id
+
     # Basic hardening headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
