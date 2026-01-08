@@ -364,6 +364,13 @@ Recruiting Team"""
 
     return "This is a mock response from the AI Job Screening system. Please configure a valid API key to get real AI analysis."
 
+import hashlib
+
+def _compute_cache_key(prompt, model, temperature):
+    """Compute a deterministic hash for the cache key."""
+    raw = f"{model}:{temperature}:{prompt}"
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
 def call_llm(prompt, temperature=0.6):
     """Unified LLM call supporting Cohere and OpenAI.
     LLM_MODEL format examples:
@@ -374,27 +381,58 @@ def call_llm(prompt, temperature=0.6):
     """
     provider, model = (LLM_MODEL.split(":", 1) + [""])[:2]
     provider = provider.lower()
+    
+    # 1. Check Cache (Redis)
+    cache_key = None
+    if redis_client:
+        try:
+            cache_key = f"llm_cache:{_compute_cache_key(prompt, LLM_MODEL, temperature)}"
+            cached = redis_client.get(cache_key)
+            if cached:
+                logger.info(f"llm.cache_hit key={cache_key}")
+                return cached.decode('utf-8')
+        except Exception as e:
+            logger.warning(f"llm.cache_read_error error={e}")
+
+    result = None
     try:
         if provider == "cohere":
             if not cohere_client:
                 logger.warning("llm.cohere_not_configured")
-                return _get_mock_response(prompt)
-            resp = cohere_client.chat(
-                model=model,
-                message=prompt,
-                temperature=temperature
-            )
-            return resp.text.strip()
+                result = _get_mock_response(prompt)
+            else:
+                resp = cohere_client.chat(
+                    model=model,
+                    message=prompt,
+                    temperature=temperature
+                )
+                result = resp.text.strip()
         elif provider == "openai":
             if not openai_client:
                 logger.warning("llm.openai_not_configured")
-                return _get_mock_response(prompt)
-            resp = openai_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature
-            )
-            return resp.choices[0].message.content.strip()
+                result = _get_mock_response(prompt)
+            else:
+                resp = openai_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=temperature
+                )
+                result = resp.choices[0].message.content.strip()
+        else:
+            logger.warning(f"llm.unsupported_provider provider={provider}")
+            result = _get_mock_response(prompt)
+    except Exception as e:
+        logger.error(f"llm.call_failed error={e}")
+        return None
+
+    # 2. Write to Cache (TTL 24h)
+    if result and redis_client and cache_key:
+        try:
+            redis_client.setex(cache_key, 86400, result)
+        except Exception as e:
+            logger.warning(f"llm.cache_write_error error={e}")
+
+    return result
         else:
             logger.warning(f"llm.unsupported_provider provider={provider}")
             return _get_mock_response(prompt)
