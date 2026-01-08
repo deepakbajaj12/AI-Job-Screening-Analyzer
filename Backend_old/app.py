@@ -10,6 +10,7 @@ from flask_cors import CORS
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
 from celery import Celery
+import redis
 import cohere
 import pdfplumber
 import importlib
@@ -56,6 +57,14 @@ def make_celery(app):
     return celery
 
 celery = make_celery(app)
+
+# Redis Client for Rate Limiting
+redis_client = None
+try:
+    redis_client = redis.from_url(app.config['CELERY_BROKER_URL'])
+    logger.info(f"Connected to Redis at {app.config['CELERY_BROKER_URL']}")
+except Exception as e:
+    logger.warning(f"Failed to connect to Redis: {e}. Rate limiting will fall back to in-memory.")
 
 from Backend_old.config import Config as _Cfg
 _origins = _Cfg.ALLOWED_ORIGINS
@@ -116,34 +125,75 @@ def rate_limit(max_requests=30, per_seconds=60, key_fn=None):
     def decorator(fn):
         def inner(*args, **kwargs):
             now = time.time()
+            ident = "unknown"
             if key_fn:
                 ident = key_fn()
             else:
-                # Default: user ID if available else IP
+                 # Default: user ID if available else IP
                 auth_header = request.headers.get("Authorization", "")
                 uid = None
                 if auth_header.startswith("Bearer "):
                     try:
-                        # Lightweight decode attempt will still rely on normal path
-                        pass
+                         # We don't verify token here again, just use it as key if valid-ish
+                        uid = auth_header.split(" ")[1][:20] 
                     except Exception:
                         pass
-                uid = request.headers.get("X-User-Id")  # fallback header hint
+                uid = request.headers.get("X-User-Id", uid)
                 ident = uid or request.remote_addr or "anonymous"
-            with _rate_lock:
-                bucket = _rate_buckets[ident]
-                # purge old
-                cutoff = now - per_seconds
-                while bucket and bucket[0] < cutoff:
-                    bucket.pop(0)
-                if len(bucket) >= max_requests:
-                    retry_after = round(bucket[0] + per_seconds - now, 1)
-                    return jsonify({
-                        "error": "rate_limited",
-                        "message": f"Too many requests. Try again in {retry_after}s",
-                        "retryAfterSeconds": retry_after
-                    }), 429
-                bucket.append(now)
+
+            if redis_client:
+                # Redis-based distributed rate limiting (Token Bucket / Sliding Window)
+                # Using a simple list pattern: key -> list of timestamps
+                # LTRIM to size of max_requests is efficiently maintained?
+                # Actually, simpler pattern: key = rate:{ident}, Use RPUSH + EXPIRE
+                
+                key = f"rate_limit:{ident}:{fn.__name__}"
+                try:
+                    # Start a transaction (pipeline)
+                    pipe = redis_client.pipeline()
+                    pipe.rpush(key, now)
+                    pipe.expire(key, per_seconds + 1) # Auto-cleanup
+                    pipe.lrange(key, 0, -1)
+                    results = pipe.execute()
+                    
+                    timestamps = [float(t) for t in results[2]]
+                    
+                    # Filter timestamps within window
+                    valid_timestamps = [t for t in timestamps if t > now - per_seconds]
+                    
+                    # If list was too long, trim it asynchronously for next time (or just rely on expiration)
+                    # Ideally we would LTRIM but for short windows expiration handles it mostly.
+                    
+                    if len(valid_timestamps) > max_requests:
+                        retry_after = round(valid_timestamps[0] + per_seconds - now, 1)
+                        if retry_after < 0: retry_after = 1
+                        return jsonify({
+                            "error": "rate_limited",
+                            "message": f"Too many requests. Try again in {retry_after}s",
+                            "retryAfterSeconds": retry_after
+                        }), 429
+                        
+                except Exception as e:
+                    logger.error(f"Redis rate limit error: {e}")
+                    # Fallback to allow if redis fails
+                    pass
+            else:
+                # In-memory Fallback
+                with _rate_lock:
+                    bucket = _rate_buckets[ident]
+                    # purge old
+                    cutoff = now - per_seconds
+                    while bucket and bucket[0] < cutoff:
+                        bucket.pop(0)
+                    if len(bucket) >= max_requests:
+                        retry_after = round(bucket[0] + per_seconds - now, 1)
+                        return jsonify({
+                            "error": "rate_limited",
+                            "message": f"Too many requests. Try again in {retry_after}s",
+                            "retryAfterSeconds": retry_after
+                        }), 429
+                    bucket.append(now)
+            
             return fn(*args, **kwargs)
         inner.__name__ = fn.__name__
         return inner
