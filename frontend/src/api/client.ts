@@ -1,5 +1,21 @@
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
 
+async function pollTask(taskId: string) {
+  let attempts = 0
+  const maxAttempts = 120 
+  while (attempts < maxAttempts) {
+    await new Promise(r => setTimeout(r, 2000))
+    const res = await fetch(`${API_BASE}/tasks/${taskId}`)
+    if (res.ok) {
+       const status = await res.json()
+       if (status.state === 'SUCCESS') return status.result
+       if (status.state === 'FAILURE' || status.state === 'REVOKED') throw new Error(status.error || 'Task failed')
+    }
+    attempts++
+  }
+  throw new Error('Analysis timed out')
+}
+
 export async function analyzeJobSeeker(token: string | null, payload: { resume: File, jobDescription: string }) {
   const form = new FormData()
   form.append('mode', 'jobSeeker')
@@ -11,7 +27,11 @@ export async function analyzeJobSeeker(token: string | null, payload: { resume: 
     body: form
   })
   if (!res.ok) throw new Error(`Analyze failed: ${res.status}`)
-  return res.json()
+  const data = await res.json()
+  if (data.task_id) {
+    return pollTask(data.task_id)
+  }
+  return data
 }
 
 export async function analyzeRecruiter(token: string | null, payload: { resume: File, jobDescription: File, recruiterEmail: string }) {
@@ -26,7 +46,11 @@ export async function analyzeRecruiter(token: string | null, payload: { resume: 
     body: form
   })
   if (!res.ok) throw new Error(`Analyze failed: ${res.status}`)
-  return res.json()
+  const data = await res.json()
+  if (data.task_id) {
+    return pollTask(data.task_id)
+  }
+  return data
 }
 
 export async function getHealth() {

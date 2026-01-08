@@ -29,6 +29,11 @@ class Config:
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USER: str | None = os.getenv("SMTP_USER")
     SMTP_PASS: str | None = os.getenv("SMTP_PASS")
+
+    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
+    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+
+    SMTP_PASS: str | None = os.getenv("SMTP_PASS")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "no-reply@example.com")
     WEBHOOK_URL: str | None = os.getenv("WEBHOOK_URL")
 

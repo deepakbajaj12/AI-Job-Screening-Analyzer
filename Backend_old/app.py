@@ -5,10 +5,11 @@ import time
 import threading
 from datetime import datetime
 from collections import defaultdict
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, url_for
 from flask_cors import CORS
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
+from celery import Celery
 import cohere
 import pdfplumber
 import importlib
@@ -35,6 +36,27 @@ config = Config()
 init_directories(config)
 
 app = Flask(__name__)
+
+# Celery Configuration
+app.config['CELERY_BROKER_URL'] = config.CELERY_BROKER_URL
+app.config['CELERY_RESULT_BACKEND'] = config.CELERY_RESULT_BACKEND
+
+def make_celery(app):
+    celery = Celery(
+        app.import_name,
+        backend=app.config['CELERY_RESULT_BACKEND'],
+        broker=app.config['CELERY_BROKER_URL']
+    )
+    celery.conf.update(app.config)
+    class ContextTask(celery.Task):
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return self.run(*args, **kwargs)
+    celery.Task = ContextTask
+    return celery
+
+celery = make_celery(app)
+
 from Backend_old.config import Config as _Cfg
 _origins = _Cfg.ALLOWED_ORIGINS
 if _origins and _origins != "*":
@@ -614,30 +636,11 @@ def metrics():
     uptime = round(time.time() - START_TIME, 1)
     return jsonify({'uptimeSeconds': uptime, **_metrics})
 
-@app.route("/analyze", methods=["POST"])
-@rate_limit(40, 60)
-@auth_required
-def analyze(user_info):
+@celery.task(bind=True)
+def run_analysis_task(self, mode, resume_text, job_desc_text, recruiter_email, user_info):
     start = time.time()
-    _metrics['requests'] += 1
-
-    mode = request.form.get("mode")
-    if mode not in ["jobSeeker", "recruiter"]:
-        return jsonify({"error": "Invalid mode; must be 'jobSeeker' or 'recruiter'"}), 400
-
-    resume_file = request.files.get("resume")
-    if not resume_file:
-        return jsonify({"error": "Resume file is required"}), 400
-
-    resume_text = extract_text_from_pdf(resume_file)
-    if not resume_text:
-        return jsonify({"error": "Could not extract text from resume PDF"}), 400
-
-    resume_text = resume_text[:3000]  # Limit length for prompt
-
+    
     if mode == "jobSeeker":
-        job_desc = request.form.get("jobDescription", "").strip()[:2000]
-
         prompt = f"""
 You are an expert AI career coach and HR specialist.
 
@@ -657,16 +660,14 @@ Resume:
 \"\"\"{resume_text}\"\"\"
 
 Job Description:
-\"\"\"{job_desc}\"\"\"
+\"\"\"{job_desc_text}\"\"\"
 """
-
         ai_response = call_cohere_api(prompt)
         if not ai_response:
-            return jsonify({"error": "AI service error"}), 500
+            return {"error": "AI service error"}
 
         parsed = extract_json_from_text(ai_response)
         if not parsed:
-            # fallback with raw AI response in generalFeedback only
             parsed = {
                 "strengths": [],
                 "improvementAreas": [],
@@ -676,37 +677,14 @@ Job Description:
 
         final_result = ensure_non_empty_fields(parsed)
         final_result["formattedReport"] = format_report(final_result)
-        # Semantic (if job_desc provided)
-        semantic_score = compute_semantic_match(resume_text, job_desc) if job_desc else None
+        # Semantic
+        semantic_score = compute_semantic_match(resume_text, job_desc_text) if job_desc_text else None
         if semantic_score is not None:
-            final_result['semanticMatchPercentage'] = semantic_score
-        write_audit(user_info.get('uid'), 'analyze.jobSeeker', {'semantic': semantic_score is not None})
-        dispatch_event('analysis.completed', {
-            'userId': user_info.get('uid'),
-            'mode': 'jobSeeker',
-            'semanticMatch': semantic_score,
-            'notifyEmail': None
-        })
-        # track latency
-        elapsed = (time.time() - start) * 1000.0
-        m = _metrics['analyze']
-        m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
-        m['count'] += 1
-        return jsonify(final_result)
+             final_result['semanticMatchPercentage'] = semantic_score
+        
+        return final_result
 
     elif mode == "recruiter":
-        job_desc_file = request.files.get("job_description")
-        recruiter_email = request.form.get("recruiterEmail", "").strip()
-
-        if not job_desc_file or not recruiter_email:
-            return jsonify({"error": "Job description file and recruiterEmail are required for recruiter mode"}), 400
-
-        job_desc_text = extract_text_from_pdf(job_desc_file)
-        if not job_desc_text:
-            return jsonify({"error": "Could not extract text from job description PDF"}), 400
-
-        job_desc_text = job_desc_text[:2000]
-
         # Simple lexical match percentage calculation
         resume_words = set(re.findall(r"\w+", resume_text.lower()))
         job_words = set(re.findall(r"\w+", job_desc_text.lower()))
@@ -738,10 +716,9 @@ Resume:
 Job Description:
 \"\"\"{job_desc_text}\"\"\"
 """
-
         ai_response = call_cohere_api(prompt)
         if not ai_response:
-            return jsonify({"error": "AI service error"}), 500
+            return {"error": "AI service error"}
 
         parsed = extract_json_from_text(ai_response)
         if not parsed:
@@ -751,34 +728,82 @@ Job Description:
                 "recommendedRoles": [],
                 "generalFeedback": ai_response
             }
-
+        
         final_result = ensure_non_empty_fields(parsed)
-        # Prepend match percentage to general feedback
         final_result["generalFeedback"] = f"Lexical Match: {match_percentage}% | Semantic: {semantic_score if semantic_score is not None else 'N/A'}% | Combined: {combined}%\n\n{final_result['generalFeedback']}"
         final_result['lexicalMatchPercentage'] = match_percentage
         if semantic_score is not None:
             final_result['semanticMatchPercentage'] = semantic_score
             final_result['combinedMatchPercentage'] = combined
-        write_audit(user_info.get('uid'), 'analyze.recruiter', {'lexical': match_percentage, 'semantic': semantic_score})
-        dispatch_event('analysis.completed', {
-            'userId': user_info.get('uid'),
-            'mode': 'recruiter',
-            'matchPercentage': match_percentage,
-            'semanticMatch': semantic_score,
-            'combined': combined,
-            'notifyEmail': recruiter_email if recruiter_email else None
-        })
+            
         final_result["formattedReport"] = format_report(final_result)
-        # track latency
-        elapsed = (time.time() - start) * 1000.0
-        m = _metrics['analyze']
-        m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
-        m['count'] += 1
-        return jsonify(final_result)
+        return final_result
+    
+    return {"error": "Invalid mode"}
 
+@app.route('/tasks/<task_id>', methods=['GET'])
+def get_task_status(task_id):
+    task = run_analysis_task.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        return jsonify({
+            'state': task.state,
+            'status': 'Pending...'
+        })
+    elif task.state != 'FAILURE':
+        return jsonify({
+            'state': task.state,
+            'result': task.result
+        })
     else:
-        _metrics['errors'] += 1
-        return jsonify({"error": "Unhandled mode"}), 400
+        return jsonify({
+            'state': task.state,
+            'error': str(task.info)
+        })
+
+@app.route("/analyze", methods=["POST"])
+@rate_limit(40, 60)
+@auth_required
+def analyze(user_info):
+    _metrics['requests'] += 1
+    start = time.time()
+
+    mode = request.form.get("mode")
+    if mode not in ["jobSeeker", "recruiter"]:
+        return jsonify({"error": "Invalid mode; must be 'jobSeeker' or 'recruiter'"}), 400
+
+    resume_file = request.files.get("resume")
+    if not resume_file:
+        return jsonify({"error": "Resume file is required"}), 400
+
+    resume_text = extract_text_from_pdf(resume_file)
+    if not resume_text:
+        return jsonify({"error": "Could not extract text from resume PDF"}), 400
+
+    resume_text = resume_text[:3000]
+
+    job_desc_text = ""
+    recruiter_email = ""
+
+    if mode == "jobSeeker":
+        job_desc_text = request.form.get("jobDescription", "").strip()[:2000]
+    elif mode == "recruiter":
+         job_desc_file = request.files.get("job_description")
+         recruiter_email = request.form.get("recruiterEmail", "").strip()
+         if job_desc_file:
+             job_desc_text = extract_text_from_pdf(job_desc_file) or ""
+             job_desc_text = job_desc_text[:2000]
+         if not job_desc_text or not recruiter_email:
+             return jsonify({"error": "Job description file and recruiterEmail are required"}), 400
+
+    # Dispatch to Celery
+    task = run_analysis_task.delay(mode, resume_text, job_desc_text, recruiter_email, user_info)
+    
+    elapsed = (time.time() - start) * 1000.0
+    m = _metrics['analyze']
+    m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
+    m['count'] += 1
+
+    return jsonify({"task_id": task.id, "status": "processing"}), 202
 
 # =============================
 # Coaching Endpoints
