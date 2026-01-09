@@ -68,3 +68,12 @@ def test_sys_info(client):
     assert 'python_version' in data
     assert 'cpu_count' in data
 
+
+def test_process_info(client):
+    r = client.get('/internal/process-info')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert 'pid' in data
+    assert 'thread_count' in data
+
+

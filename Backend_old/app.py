@@ -742,6 +742,17 @@ def sys_info():
         'cpu_count': os.cpu_count() or 1
     })
 
+@app.route('/internal/process-info', methods=['GET'])
+def process_info():
+    """
+    Internal endpoint to return process details.
+    """
+    return jsonify({
+        'pid': os.getpid(),
+        'ppid': os.getppid() if hasattr(os, 'getppid') else None,
+        'thread_count': threading.active_count()
+    })
+
 @celery.task(bind=True)
 def run_analysis_task(self, mode, resume_text, job_desc_text, recruiter_email, user_info):
     start = time.time()
