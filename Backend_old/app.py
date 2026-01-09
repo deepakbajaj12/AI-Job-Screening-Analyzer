@@ -433,13 +433,6 @@ def call_llm(prompt, temperature=0.6):
             logger.warning(f"llm.cache_write_error error={e}")
 
     return result
-        else:
-            logger.warning(f"llm.unsupported_provider provider={provider}")
-            return _get_mock_response(prompt)
-    except Exception as e:
-        logger.error(f"llm.call_failed error={e}")
-        return _get_mock_response(prompt)
-
 
 def verify_firebase_token(id_token):
     try:
@@ -736,6 +729,18 @@ def version():
 def metrics():
     uptime = round(time.time() - START_TIME, 1)
     return jsonify({'uptimeSeconds': uptime, **_metrics})
+
+@app.route('/internal/sys-info', methods=['GET'])
+def sys_info():
+    """
+    Internal endpoint to expose system information for debugging.
+    """
+    return jsonify({
+        'platform': sys.platform,
+        'python_version': sys.version,
+        'cwd': os.getcwd(),
+        'cpu_count': os.cpu_count() or 1
+    })
 
 @celery.task(bind=True)
 def run_analysis_task(self, mode, resume_text, job_desc_text, recruiter_email, user_info):

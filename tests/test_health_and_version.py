@@ -58,3 +58,13 @@ def test_version(client):
     assert r.status_code == 200
     data = r.get_json()
     assert data['version'] == 'test-version'
+
+
+def test_sys_info(client):
+    r = client.get('/internal/sys-info')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert 'platform' in data
+    assert 'python_version' in data
+    assert 'cpu_count' in data
+
