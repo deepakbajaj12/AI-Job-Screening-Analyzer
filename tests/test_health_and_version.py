@@ -77,3 +77,12 @@ def test_process_info(client):
     assert 'thread_count' in data
 
 
+def test_network_info(client):
+    r = client.get('/internal/network-info')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert 'hostname' in data
+    assert 'ip_address' in data
+
+
+

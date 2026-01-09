@@ -4,6 +4,7 @@ import re
 import uuid
 import time
 import threading
+import socket
 from datetime import datetime
 from collections import defaultdict
 from flask import Flask, request, jsonify, url_for, g
@@ -751,6 +752,23 @@ def process_info():
         'pid': os.getpid(),
         'ppid': os.getppid() if hasattr(os, 'getppid') else None,
         'thread_count': threading.active_count()
+    })
+
+@app.route('/internal/network-info', methods=['GET'])
+def network_info():
+    """
+    Internal endpoint to expose basic network info.
+    """
+    try:
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+    except Exception:
+        hostname = "unknown"
+        local_ip = "unknown"
+        
+    return jsonify({
+        'hostname': hostname,
+        'ip_address': local_ip
     })
 
 @celery.task(bind=True)
