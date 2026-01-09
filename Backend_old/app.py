@@ -771,6 +771,17 @@ def network_info():
         'ip_address': local_ip
     })
 
+@app.route('/internal/thread-info', methods=['GET'])
+def thread_info():
+    """
+    Internal endpoint to return active thread details.
+    """
+    threads = [t.name for t in threading.enumerate()]
+    return jsonify({
+        'total_threads': len(threads),
+        'active_threads': threads
+    })
+
 @celery.task(bind=True)
 def run_analysis_task(self, mode, resume_text, job_desc_text, recruiter_email, user_info):
     start = time.time()

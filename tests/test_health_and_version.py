@@ -85,4 +85,14 @@ def test_network_info(client):
     assert 'ip_address' in data
 
 
+def test_thread_info(client):
+    r = client.get('/internal/thread-info')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert 'total_threads' in data
+    assert 'active_threads' in data
+    assert isinstance(data['active_threads'], list)
+
+
+
 
