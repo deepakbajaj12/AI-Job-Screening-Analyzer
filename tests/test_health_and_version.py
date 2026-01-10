@@ -103,6 +103,16 @@ def test_gc_info(client):
     assert 'gc_threshold' in data
 
 
+def test_time_info(client):
+    r = client.get('/internal/time-info')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert 'current_time' in data
+    assert 'utc_time' in data
+    assert 'timezone' in data
+
+
+
 
 
 

@@ -794,6 +794,18 @@ def gc_info():
         'gc_threshold': gc.get_threshold()
     })
 
+@app.route('/internal/time-info', methods=['GET'])
+def time_info():
+    """
+    Internal endpoint to return server time details.
+    """
+    now = datetime.now()
+    return jsonify({
+        'current_time': now.isoformat(),
+        'utc_time': datetime.utcnow().isoformat(),
+        'timezone': time.tzname
+    })
+
 @celery.task(bind=True)
 def run_analysis_task(self, mode, resume_text, job_desc_text, recruiter_email, user_info):
     start = time.time()
