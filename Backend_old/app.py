@@ -437,14 +437,16 @@ def call_llm(prompt, temperature=0.6):
     return result
 
 def verify_firebase_token(id_token):
+    # Check for dev token strictly first
+    if DEV_BYPASS_AUTH and id_token == "dev":
+        logger.warning("auth.dev_bypass_active user=dev-user")
+        return {"uid": "dev-user", "email": "dev@example.com", "devBypass": True}
+
     try:
         decoded_token = firebase_auth.verify_id_token(id_token)
         return decoded_token
     except Exception as e:
         logger.error(f"auth.token_verification_failed error={e}")
-        if DEV_BYPASS_AUTH:
-            # Provide a synthetic user in dev mode
-            return {"uid": "dev-user", "email": "dev@example.com", "devBypass": True}
         return None
 
 def extract_text_from_pdf(file_storage):
