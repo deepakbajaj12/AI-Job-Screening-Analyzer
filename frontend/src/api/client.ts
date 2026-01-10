@@ -53,14 +53,14 @@ export async function analyzeRecruiter(token: string | null, payload: { resume: 
   return data
 }
 
-export async function getHealth() {
-  const res = await fetch(`${API_BASE}/health`)
+export async function getHealth(signal?: AbortSignal) {
+  const res = await fetch(`${API_BASE}/health`, { signal })
   if (!res.ok) throw new Error('Health check failed')
   return res.json()
 }
 
-export async function getVersion() {
-  const res = await fetch(`${API_BASE}/version`)
+export async function getVersion(signal?: AbortSignal) {
+  const res = await fetch(`${API_BASE}/version`, { signal })
   if (!res.ok) throw new Error('Version check failed')
   return res.json()
 }
