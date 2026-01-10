@@ -94,5 +94,15 @@ def test_thread_info(client):
     assert isinstance(data['active_threads'], list)
 
 
+def test_gc_info(client):
+    r = client.get('/internal/gc-info')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert 'gc_enabled' in data
+    assert 'gc_counts' in data
+    assert 'gc_threshold' in data
+
+
+
 
 

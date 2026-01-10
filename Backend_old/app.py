@@ -5,6 +5,7 @@ import uuid
 import time
 import threading
 import socket
+import gc
 from datetime import datetime
 from collections import defaultdict
 from flask import Flask, request, jsonify, url_for, g
@@ -780,6 +781,17 @@ def thread_info():
     return jsonify({
         'total_threads': len(threads),
         'active_threads': threads
+    })
+
+@app.route('/internal/gc-info', methods=['GET'])
+def gc_info():
+    """
+    Internal endpoint to return garbage collector stats.
+    """
+    return jsonify({
+        'gc_enabled': gc.isenabled(),
+        'gc_counts': gc.get_count(),
+        'gc_threshold': gc.get_threshold()
     })
 
 @celery.task(bind=True)
