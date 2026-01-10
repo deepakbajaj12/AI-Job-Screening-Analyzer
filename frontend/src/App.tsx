@@ -6,6 +6,7 @@ import Recruiter from './pages/Recruiter'
 import Coaching from './pages/Coaching'
 import MockInterview from './pages/MockInterview'
 import NavBar from './components/NavBar'
+import Footer from './components/Footer'
 
 export default function App() {
   class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -36,7 +37,7 @@ export default function App() {
             </Routes>
           </ErrorBoundary>
       </main>
-      <footer className="footer">© {new Date().getFullYear()} AI Job Screening</footer>
+      <Footer />
     </div>
   )
 }
