@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
+import DragAndDropUpload from '../components/DragAndDropUpload'
 
 export default function JobSeeker() {
   const { token } = useAuth()
@@ -74,10 +75,10 @@ export default function JobSeeker() {
     <section>
       <h2>Job Seeker Tools</h2>
       <div className="card">
-        <label>Resume (PDF)
-          <input type="file" accept="application/pdf" onChange={e => setResume(e.target.files?.[0] || null)} />
-        </label>
-        <label>Job Description (optional)
+        <label style={{ marginBottom: '1rem' }}>Resume (PDF)</label>
+        <DragAndDropUpload onFileSelect={setResume} />
+
+        <label style={{ marginTop: '1.5rem' }}>Job Description (optional)
           <textarea rows={6} value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste job description text" />
         </label>
         

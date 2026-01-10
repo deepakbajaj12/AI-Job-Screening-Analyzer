@@ -38,3 +38,8 @@ input[type="file"], input[type="email"], textarea { width:100%; margin-top:6px; 
 .toast { position:fixed; right:16px; bottom:16px; background:#1b2446; color:#e7ecf2; padding:10px 14px; border:1px solid #2b365d; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.3); }
 .report { white-space:pre-wrap; }
 .footer { padding:10px 16px; border-top:1px solid #223; color:#9bb0c9; }
+/* Drag and Drop Upload */
+.drag-drop-zone { border: 2px dashed #2b365d; border-radius: 12px; padding: 2rem; text-align: center; transition: all 0.2s ease; background: var(--card); cursor: pointer; color: var(--muted); }
+.drag-drop-zone.active { border-color: var(--accent); background: rgba(79, 140, 255, 0.1); color: var(--fg); }
+.drag-drop-zone p { margin: 0; pointer-events: none; }
+
