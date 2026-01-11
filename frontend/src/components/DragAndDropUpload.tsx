@@ -55,7 +55,8 @@ export default function DragAndDropUpload({ onFileSelect, accept = "application/
         type="file" 
         accept={accept} 
         onChange={handleChange} 
-        style={{ display: 'none' }}
+        className="hidden"
+        title="File upload"
       />
       <div>
         <p style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>📄</p>

@@ -58,6 +58,19 @@ export default function JobSeeker() {
     }
   }
 
+  const handleDownload = () => {
+    if (!result) return
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `job-seeker-report-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const handleNetworkingSubmit = async () => {
     if (!netRole || !netCompany) { setError('Please provide target role and company'); return }
     setLoading(true)
@@ -128,6 +141,8 @@ export default function JobSeeker() {
       {result && activeTab !== 'networking' && (
         <div className="card">
           <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : activeTab === 'health' ? 'Resume Health Check' : 'Skill Gap'}</h3>
+          
+          <button className="btn" style={{ marginBottom: '15px', backgroundColor: '#28a745' }} onClick={handleDownload}>Download Report</button>
           
           {activeTab === 'analyze' && (
             result.formattedReport ? <pre className="report">{result.formattedReport}</pre> : <pre>{JSON.stringify(result, null, 2)}</pre>
