@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react'
 
 interface DragAndDropUploadProps {
-  onFileSelect: (file: File) => void
+  onFileSelect: (file: File | null) => void
   accept?: string
   label?: string
 }
@@ -42,6 +42,14 @@ export default function DragAndDropUpload({ onFileSelect, accept = "application/
     }
   }, [onFileSelect])
 
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setFileName(null)
+    onFileSelect(null)
+    const input = document.getElementById('hidden-file-input') as HTMLInputElement
+    if (input) input.value = ''
+  }
+
   return (
     <div 
       className={`drag-drop-zone ${isDragOver ? 'active' : ''}`}
@@ -61,6 +69,24 @@ export default function DragAndDropUpload({ onFileSelect, accept = "application/
       <div>
         <p style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>📄</p>
         <p>{fileName ? `Selected: ${fileName}` : label}</p>
+        {fileName && (
+          <button 
+            type="button" 
+            onClick={handleRemove}
+            style={{ 
+              marginTop: '0.5rem', 
+              padding: '0.3rem 0.8rem', 
+              backgroundColor: '#dc3545', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px', 
+              cursor: 'pointer',
+              fontSize: '0.9rem'
+            }}
+          >
+            Remove File
+          </button>
+        )}
       </div>
     </div>
   )
