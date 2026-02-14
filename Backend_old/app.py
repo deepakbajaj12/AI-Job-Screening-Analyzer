@@ -63,11 +63,16 @@ celery = make_celery(app)
 
 # Redis Client for Rate Limiting
 redis_client = None
+REDIS_AVAILABLE = False
 try:
     redis_client = redis.from_url(app.config['CELERY_BROKER_URL'])
+    # Test connection
+    redis_client.ping()
+    REDIS_AVAILABLE = True
     logger.info(f"Connected to Redis at {app.config['CELERY_BROKER_URL']}")
 except Exception as e:
-    logger.warning(f"Failed to connect to Redis: {e}. Rate limiting will fall back to in-memory.")
+    logger.warning(f"Failed to connect to Redis: {e}. Rate limiting and async tasks will be disabled.")
+    redis_client = None
 
 from Backend_old.config import Config as _Cfg
 _origins = _Cfg.ALLOWED_ORIGINS
@@ -967,15 +972,32 @@ def analyze(user_info):
          if not job_desc_text or not recruiter_email:
              return jsonify({"error": "Job description file and recruiterEmail are required"}), 400
 
-    # Dispatch to Celery
-    task = run_analysis_task.delay(mode, resume_text, job_desc_text, recruiter_email, user_info)
-    
-    elapsed = (time.time() - start) * 1000.0
-    m = _metrics['analyze']
-    m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
-    m['count'] += 1
+    # Check if Redis/Celery is available
+    if REDIS_AVAILABLE:
+        # Dispatch to Celery async
+        task = run_analysis_task.delay(mode, resume_text, job_desc_text, recruiter_email, user_info)
+        
+        elapsed = (time.time() - start) * 1000.0
+        m = _metrics['analyze']
+        m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
+        m['count'] += 1
 
-    return jsonify({"task_id": task.id, "status": "processing"}), 202
+        return jsonify({"task_id": task.id, "status": "processing"}), 202
+    else:
+        # Execute synchronously when Redis is not available
+        logger.info("Executing analysis synchronously (Redis unavailable)")
+        try:
+            result = run_analysis_task(None, mode, resume_text, job_desc_text, recruiter_email, user_info)
+            
+            elapsed = (time.time() - start) * 1000.0
+            m = _metrics['analyze']
+            m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
+            m['count'] += 1
+            
+            return jsonify({"result": result, "status": "completed", "mode": "synchronous"}), 200
+        except Exception as e:
+            logger.error(f"Synchronous analysis failed: {e}")
+            return jsonify({"error": "Analysis failed", "details": str(e)}), 500
 
 # =============================
 # Coaching Endpoints
@@ -1695,4 +1717,5 @@ def generate_networking_message(user_info):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+

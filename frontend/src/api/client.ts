@@ -28,8 +28,11 @@ export async function analyzeJobSeeker(token: string | null, payload: { resume: 
   })
   if (!res.ok) throw new Error(`Analyze failed: ${res.status}`)
   const data = await res.json()
+  // Handle both async (task_id) and sync (result) responses
   if (data.task_id) {
     return pollTask(data.task_id)
+  } else if (data.result) {
+    return data.result
   }
   return data
 }
@@ -47,8 +50,11 @@ export async function analyzeRecruiter(token: string | null, payload: { resume: 
   })
   if (!res.ok) throw new Error(`Analyze failed: ${res.status}`)
   const data = await res.json()
+  // Handle both async (task_id) and sync (result) responses
   if (data.task_id) {
     return pollTask(data.task_id)
+  } else if (data.result) {
+    return data.result
   }
   return data
 }
