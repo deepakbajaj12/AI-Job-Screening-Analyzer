@@ -7,10 +7,11 @@ export default function Footer() {
         © {new Date().getFullYear()} AI Job Screening &bull; v1.0.0
       </div>
       <div style={{ display: 'flex', gap: '1rem' }}>
-        <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</a>
-        <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</a>
+        <a href="#" className="link">Privacy</a>
+        <a href="#" className="link">Terms</a>
         <span title="System Status: Operational">Status: 🟢</span>
       </div>
     </footer>
   )
 }
+
