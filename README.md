@@ -165,7 +165,7 @@ python -m venv venv
 venv/Scripts/activate  # Windows PowerShell
 pip install -r Backend_old/requirements.txt
 copy .env.example .env  # then edit .env
-python Backend_old/app.py
+python run.py
 ```
 Or via Docker Compose:
 ```powershell
