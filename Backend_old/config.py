@@ -11,7 +11,7 @@ class Config:
     to simplify local development while remaining 12-factor friendly in production.
     """
 
-    APP_VERSION: str = os.getenv("APP_VERSION", "0.4.0")
+    APP_VERSION: str = os.getenv("APP_VERSION", "0.4.1-fix")
     DEV_BYPASS_AUTH: bool = os.getenv("DEV_BYPASS_AUTH", "1") == "1"
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
 

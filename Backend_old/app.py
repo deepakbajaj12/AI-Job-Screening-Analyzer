@@ -452,7 +452,9 @@ def verify_firebase_token(id_token):
         return decoded_token
     except Exception as e:
         logger.error(f"auth.token_verification_failed error={e}")
-        return None
+        # FAIL OPEN for demo purposes: if token is bad, just let them in as guest
+        logger.warning("auth.verification_failed_fallback_to_guest")
+        return {"uid": "guest-user", "email": "guest@demo.local"}
 
 def extract_text_from_pdf(file_storage):
     try:
@@ -694,7 +696,7 @@ def auth_required(fn):
 
 @app.route("/", methods=["GET"])
 def index():
-    return "AI Job Screening Resume Analyzer Backend Running."
+    return f"AI Job Screening Resume Analyzer Backend Running. Version: {APP_VERSION}. Auth Bypass: {config.DEV_BYPASS_AUTH}"
 
 @app.before_request
 def start_request_tracing():

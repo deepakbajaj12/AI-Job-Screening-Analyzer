@@ -1,0 +1,89 @@
+{
+  "dev-user": [
+    {
+      "timestamp": "2026-02-16T14:08:44.692216Z",
+      "metrics": {
+        "wordCount": 354,
+        "bulletCount": 30,
+        "avgBulletWordCount": 9.43,
+        "skillCount": 8,
+        "skillCoverageRatio": 1.0
+      },
+      "skills": [
+        "c",
+        "git",
+        "go",
+        "mysql",
+        "nlp",
+        "postgres",
+        "python",
+        "sql"
+      ],
+      "skillGaps": [],
+      "studyPack": [],
+      "bullets": [
+        "Katni,Madhya Pradesh,India bajajd382@gmail.com🔗 github.com/deepakbajaj12 +91-8889422439 in/deepak-bajaj218",
+        "Final-year B.Tech Data Science student (2026) skilled in SQL, Python, and product analytics. Experienced in building data-driven",
+        "reporting dashboards, KPI tracking workflows, and structured business insights through academic projects. Interested in supporting",
+        "Fam’s Product team by translating user and business data into actionable decisions and improved customer experiences.",
+        "RetailG enie – Data Analytics & Reporting Platform",
+        "Built SQL-based reporting workflows to track business KPIs and sales performance",
+        "Developed interactive dashboards and automated validation scripts using Python",
+        "Generated insights to support inventory and customer-focused decision making",
+        "Improved query performance (~20%) for scalable analytics reporting",
+        "AI Job Screening Analyzer – AI-Powered Decision Support Tool",
+        "Developed an AI-powered analytics tool to evaluate resumes and role-fit scoring",
+        "Automated extraction of structured insights from documents using NLP",
+        "Built API-based workflows to deliver decision-support recommendations",
+        "Strengthened ability to translate data outputs into actionable feedback",
+        "Orienta l Institute of Science and Technology, Bhopal",
+        "B.Tech in Computer Science / Data Science",
+        "| 2022–2026 | CGPA: 7.34/10",
+        "Saint Paul Senior Secondary School, Katni | 2022",
+        "Saint Paul Senior Secondary School, Katni | 2020",
+        "Google – Foundations: Data, Data, Everywhere",
+        "IBM -What is Data Science?",
+        "Interested in understanding user pain points and improving product experience through data-driven insights",
+        "Comfortable collaborating with cross-functional teams to support product decisions and KPI-focused analysis",
+        "Curious about user behavior, engagement funnels, and metrics that drive product growth and retention",
+        "Strong attention to detail with a problem-solving mindset to turn complex data into clear business actions",
+        "Product Analytics: KPI Reporting, Funnel Analysis, User Insights, Business Metrics",
+        "Data Analysis: Data Cleaning, Validation, Exploratory Data Analysis (EDA)",
+        "Visualization: Power BI, Tableau, Excel",
+        "Databases: MySQL, PostgreSQL, Query Optimization",
+        "Soft Skills: Problem Solving, Communication, Attention to Detail"
+      ],
+      "resumeExcerpt": "Deepak Bajaj\nKatni,Madhya Pradesh,India bajajd382@gmail.com🔗 github.com/deepakbajaj12 +91-8889422439 in/deepak-bajaj218\nSUMMARY\nFinal-year B.Tech Data Science student (2026) skilled in SQL, Python, and product analytics. Experienced in building data-driven\nreporting dashboards, KPI tracking workflows, and structured business insights through academic projects. Interested in supporting\nFam’s Product team by translating user and business data into actionable decisions and improved customer experiences.\nPROJECTS\nRetailG enie – Data Analytics & Reporting Platform\n🔗 GitHub: https://github.com/deepakbajaj12/RetailGenie.\nBuilt SQL-based reporting workflows to track business KPIs and sales performance\nDeveloped interactive dashboards and automated validation scripts using Python\nGenerated insights to support inventory and customer-focused decision making\nImproved query performance (~20%) for scalable analytics reporting\nAI Job Screening Analyzer – AI-Powered Decision Support Tool\n🔗 Gi tHub: https://github.com/deepakbajaj12/AI-Job-Screening-Analyzer.\nDeveloped an AI-powered analytics tool to evaluate resumes and role-fit scoring\nAutomated extraction of structured insights from documents usi",
+      "sections": {
+        "summary": "Deepak Bajaj\nKatni,Madhya Pradesh,India bajajd382@gmail.com🔗 github.com/deepakbajaj12 +91-8889422439 in/deepak-bajaj218\nFinal-year B.Tech Data Science student (2026) skilled in SQL, Python, and product analytics. Experienced in building data-driven\nreporting dashboards, KPI tracking workflows, and structured business insights through academic projects. Interested in supporting\nFam’s Product team by translating user and business data into actionable decisions and improved customer experiences.",
+        "projects": "RetailG enie – Data Analytics & Reporting Platform\n🔗 GitHub: https://github.com/deepakbajaj12/RetailGenie.\nBuilt SQL-based reporting workflows to track business KPIs and sales performance\nDeveloped interactive dashboards and automated validation scripts using Python\nGenerated insights to support inventory and customer-focused decision making\nImproved query performance (~20%) for scalable analytics reporting\nAI Job Screening Analyzer – AI-Powered Decision Support Tool\n🔗 Gi tHub: https://github.com/deepakbajaj12/AI-Job-Screening-Analyzer.\nDeveloped an AI-powered analytics tool to evaluate resumes and role-fit scoring\nAutomated extraction of structured insights from documents using NLP\nBuilt API-based workflows to deliver decision-support recommendations\nStrengthened ability to translate data outputs into actionable feedback",
+        "education": "Orienta l Institute of Science and Technology, Bhopal\nB.Tech in Computer Science / Data Science\n| 2022–2026 | CGPA: 7.34/10\nSenior Secondary (Class 12)\nSaint Paul Senior Secondary School, Katni | 2022\nSecondary Education (Class 10)\nSaint Paul Senior Secondary School, Katni | 2020",
+        "certifications": "Google – Foundations: Data, Data, Everywhere\nCoursera – 2025\nOracle Certified Foundations Associate\nOracle Data Platform (2025)\nIBM -What is Data Science?\nCoursera • 2025\nProduct & User Mindset\nInterested in understanding user pain points and improving product experience through data-driven insights\nComfortable collaborating with cross-functional teams to support product decisions and KPI-focused analysis\nCurious about user behavior, engagement funnels, and metrics that drive product growth and retention\nStrong attention to detail with a problem-solving mindset to turn complex data into clear business actions",
+        "skills": "Product Analytics: KPI Reporting, Funnel Analysis, User Insights, Business Metrics\nProgramming: Python, SQL\nData Analysis: Data Cleaning, Validation, Exploratory Data Analysis (EDA)\nVisualization: Power BI, Tableau, Excel\nDatabases: MySQL, PostgreSQL, Query Optimization\nTools: Git, GitHub\nSoft Skills: Problem Solving, Communication, Attention to Detail",
+        "skills_list_raw": [
+          "Product Analytics: KPI Reporting",
+          "Funnel Analysis",
+          "User Insights",
+          "Business Metrics",
+          "Programming: Python",
+          "SQL",
+          "Data Analysis: Data Cleaning",
+          "Validation",
+          "Exploratory Data Analysis (EDA)",
+          "Visualization: Power BI",
+          "Tableau",
+          "Excel",
+          "Databases: MySQL",
+          "PostgreSQL",
+          "Query Optimization",
+          "Tools: Git",
+          "GitHub",
+          "Soft Skills: Problem Solving",
+          "Communication",
+          "Attention to Detail"
+        ]
+      },
+      "version": 1
+    }
+  ]
+}
