@@ -3,5 +3,6 @@ services:
     name: ai-job-screening-api
     env: python
     buildCommand: ""
-    startCommand: gunicorn app:app
+    # Increase timeout to 120s to prevent worker kill on slow LLM calls
+    startCommand: gunicorn --timeout 120 app:app
     plan: free
