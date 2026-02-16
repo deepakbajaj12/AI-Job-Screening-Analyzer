@@ -159,12 +159,15 @@ export default function JobSeeker() {
           {activeTab === 'linkedin' && (
             <div className="report">
               <h4>Headline</h4>
-              <p>{result.headline}</p>
+              <p>{typeof result.headline === 'string' ? result.headline : JSON.stringify(result.headline)}</p>
               <h4>About</h4>
-              <p>{result.about}</p>
+              <p>{typeof result.about === 'string' ? result.about : JSON.stringify(result.about)}</p>
               <h4>Experience Highlights</h4>
               <ul>
-                {result.experience_highlights?.map((h: string, i: number) => <li key={i}>{h}</li>)}
+                {Array.isArray(result.experience_highlights) ? 
+                  result.experience_highlights.map((h: any, i: number) => <li key={i}>{typeof h === 'string' ? h : JSON.stringify(h)}</li>)
+                  : <li>{JSON.stringify(result.experience_highlights)}</li>
+                }
               </ul>
             </div>
           )}
