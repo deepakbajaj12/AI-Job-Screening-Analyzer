@@ -11,7 +11,7 @@ class Config:
     to simplify local development while remaining 12-factor friendly in production.
     """
 
-    APP_VERSION: str = os.getenv("APP_VERSION", "0.4.5-final-fix")
+    APP_VERSION: str = os.getenv("APP_VERSION", "0.4.6-fix-cors")
     DEV_BYPASS_AUTH: bool = True  # Hardcoded Force Enable
     ALLOWED_ORIGINS: str = "*"    # Hardcoded Force Enable
 

@@ -98,7 +98,8 @@ if _origins and _origins != "*":
         allowed = [_origins]
     CORS(app, origins=allowed, supports_credentials=True)
 else:
-    CORS(app)
+    # Explicitly allow everything for public demo
+    CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "methods": "*"}})
 
 APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
 DEV_BYPASS_AUTH = config.DEV_BYPASS_AUTH
