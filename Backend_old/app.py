@@ -674,6 +674,10 @@ Top Skills: {', '.join(top_skills)}
 def auth_required(fn):
     """Decorator-like helper for token verification inside route bodies."""
     def wrapper(*args, **kwargs):
+        if config.DEV_BYPASS_AUTH:
+            # Inject mock user
+            return fn({"uid": "dev-user", "email": "dev@local"}, *args, **kwargs)
+            
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             if DEV_BYPASS_AUTH:
