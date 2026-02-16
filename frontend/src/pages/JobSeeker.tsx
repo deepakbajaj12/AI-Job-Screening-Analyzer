@@ -191,7 +191,7 @@ export default function JobSeeker() {
           {activeTab === 'tailor' && (
             <div className="report">
               <h4>Rewritten Summary</h4>
-              <p style={{ background: '#f0f8ff', padding: '10px', borderRadius: '5px' }}>{result.rewritten_summary}</p>
+              <p style={{ background: '#f0f8ff', padding: '10px', borderRadius: '5px', color: '#333' }}>{typeof result.rewritten_summary === 'string' ? result.rewritten_summary : JSON.stringify(result.rewritten_summary)}</p>
               <h4>Tailored Bullet Points</h4>
               {result.tailored_bullets?.map((item: any, i: number) => (
                 <div key={i} style={{ marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
