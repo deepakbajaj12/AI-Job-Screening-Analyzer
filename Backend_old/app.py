@@ -1062,7 +1062,10 @@ def coaching_study_pack(user_info):
     user_id = user_info.get("uid")
     versions = list_versions(user_id)
     if not versions:
-        return jsonify({"error": "No versions found"}), 404
+        return jsonify({
+            "skillGaps": [],
+            "studyPack": []
+        })
     latest = versions[-1]
     write_audit(user_id, 'coaching.study_pack', {'gaps': len(latest.get('skillGaps', []))})
     return jsonify({
@@ -1077,7 +1080,10 @@ def coaching_interview_questions(user_info):
     target_role = request.args.get("targetRole", "Software Engineer")[:100]
     versions = list_versions(user_id)
     if not versions:
-        return jsonify({"error": "No versions found"}), 404
+        return jsonify({
+            "targetRole": target_role,
+            "questions": ["Please save a resume version first to generate tailored questions."]
+        })
     latest = versions[-1]
     questions = generate_interview_questions(
         latest.get("resumeExcerpt", ""),
