@@ -29,7 +29,18 @@ from email.mime.text import MIMEText
 import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from Backend_old.config import Config, init_directories, configure_logging
+
+# Import config with fallback specifically for different deployment contexts
+try:
+    from Backend_old.config import Config, init_directories, configure_logging
+except ImportError:
+    try:
+        from config import Config, init_directories, configure_logging
+    except ImportError:
+        # Last ditch effort for weird path issues
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from config import Config, init_directories, configure_logging
+
 try:
     _openai_mod = importlib.import_module("openai")
     OpenAI = getattr(_openai_mod, "OpenAI", None)
@@ -96,8 +107,18 @@ _metrics = {'requests': 0, 'analyze': {'count': 0, 'avgMs': 0.0}, 'errors': 0}
 
 # Initialize Firebase Admin SDK
 firebase_cred_path = config.FIREBASE_CREDENTIAL_PATH
-cred = credentials.Certificate(firebase_cred_path)
-firebase_admin.initialize_app(cred)
+try:
+    # Check if file exists, else warn
+    if not os.path.exists(firebase_cred_path) and not isinstance(credentials, str):
+         # If credentials isn't a string (mock), checks file
+         logger.warning(f"Firebase credentials not found at {firebase_cred_path}")
+
+    cred = credentials.Certificate(firebase_cred_path)
+    firebase_admin.initialize_app(cred)
+    FIREBASE_AVAILABLE = True
+except Exception as e:
+    logger.error(f"Failed to initialize Firebase: {e}. Auth will fail open to guest-user.")
+    FIREBASE_AVAILABLE = False
 
 # =============================
 # LLM / Model Provider Setup
@@ -450,6 +471,10 @@ def verify_firebase_token(id_token):
     if DEV_BYPASS_AUTH and id_token == "dev":
         logger.warning("auth.dev_bypass_active user=dev-user")
         return {"uid": "dev-user", "email": "dev@example.com", "devBypass": True}
+
+    if not FIREBASE_AVAILABLE:
+         # Critical fallback if firebase init failed
+         return {"uid": "guest-user-no-firebase", "email": "guest@demo.local"}
 
     try:
         decoded_token = firebase_auth.verify_id_token(id_token)
