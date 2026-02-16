@@ -149,11 +149,11 @@ export default function JobSeeker() {
           )}
 
           {activeTab === 'coverLetter' && (
-            <div className="report" style={{ whiteSpace: 'pre-wrap' }}>{result.coverLetter}</div>
+            <div className="report" style={{ whiteSpace: 'pre-wrap' }}>{typeof result.coverLetter === 'string' ? result.coverLetter : JSON.stringify(result.coverLetter, null, 2)}</div>
           )}
 
           {activeTab === 'questions' && (
-            <div className="report" style={{ whiteSpace: 'pre-wrap' }}>{result.questions}</div>
+            <div className="report" style={{ whiteSpace: 'pre-wrap' }}>{typeof result.questions === 'string' ? result.questions : JSON.stringify(result.questions, null, 2)}</div>
           )}
 
           {activeTab === 'linkedin' && (
@@ -224,7 +224,7 @@ export default function JobSeeker() {
                 </div>
                 <div>
                   <h4>Overall Health</h4>
-                  <p>{result.summary}</p>
+                  <p>{typeof result.summary === 'string' ? result.summary : JSON.stringify(result.summary)}</p>
                 </div>
               </div>
               
