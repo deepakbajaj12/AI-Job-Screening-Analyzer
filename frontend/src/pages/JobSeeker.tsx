@@ -175,12 +175,15 @@ export default function JobSeeker() {
           {activeTab === 'salary' && (
             <div className="report">
               <h4>Estimated Salary Range</h4>
-              <p style={{ fontSize: '1.2em', fontWeight: 'bold', color: '#28a745' }}>{result.estimated_salary_range}</p>
+              <p style={{ fontSize: '1.2em', fontWeight: 'bold', color: '#28a745' }}>{typeof result.estimated_salary_range === 'string' ? result.estimated_salary_range : JSON.stringify(result.estimated_salary_range)}</p>
               <h4>Market Trends</h4>
-              <p>{result.market_trends}</p>
+              <p>{typeof result.market_trends === 'string' ? result.market_trends : JSON.stringify(result.market_trends)}</p>
               <h4>Negotiation Tips</h4>
               <ul>
-                {result.negotiation_tips?.map((tip: string, i: number) => <li key={i}>{tip}</li>)}
+                {Array.isArray(result.negotiation_tips) ? 
+                  result.negotiation_tips.map((tip: any, i: number) => <li key={i}>{typeof tip === 'string' ? tip : JSON.stringify(tip)}</li>)
+                  : <li>{JSON.stringify(result.negotiation_tips)}</li>
+                }
               </ul>
             </div>
           )}
