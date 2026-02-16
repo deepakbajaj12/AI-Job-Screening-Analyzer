@@ -12,7 +12,7 @@ class Config:
     """
 
     APP_VERSION: str = os.getenv("APP_VERSION", "0.4.0")
-    DEV_BYPASS_AUTH: bool = os.getenv("DEV_BYPASS_AUTH", "0") == "1"
+    DEV_BYPASS_AUTH: bool = os.getenv("DEV_BYPASS_AUTH", "1") == "1"
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
 
     FIREBASE_CREDENTIAL_PATH: str = os.getenv(
