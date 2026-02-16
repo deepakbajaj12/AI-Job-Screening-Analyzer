@@ -434,12 +434,16 @@ def call_llm(prompt, temperature=0.6):
                 logger.warning("llm.cohere_not_configured")
                 result = _get_mock_response(prompt)
             else:
-                resp = cohere_client.chat(
-                    model=model,
-                    message=prompt,
-                    temperature=temperature
-                )
-                result = resp.text.strip()
+                try:
+                    resp = cohere_client.chat(
+                        model=model,
+                        message=prompt,
+                        temperature=temperature
+                    )
+                    result = resp.text.strip()
+                except Exception as llm_err:
+                    logger.error(f"CoHere API call failed: {llm_err}")
+                    result = _get_mock_response(prompt)
         elif provider == "openai":
             if not openai_client:
                 logger.warning("llm.openai_not_configured")
