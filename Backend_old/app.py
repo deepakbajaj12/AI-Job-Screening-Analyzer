@@ -991,7 +991,7 @@ def analyze(user_info):
         # Execute synchronously when Redis is not available
         logger.info("Executing analysis synchronously (Redis unavailable)")
         try:
-            result = run_analysis_task(None, mode, resume_text, job_desc_text, recruiter_email, user_info)
+            result = run_analysis_task(mode, resume_text, job_desc_text, recruiter_email, user_info)
             
             elapsed = (time.time() - start) * 1000.0
             m = _metrics['analyze']
