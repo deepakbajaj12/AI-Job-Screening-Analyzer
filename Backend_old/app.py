@@ -981,66 +981,128 @@ def get_task_status(task_id):
 @rate_limit(40, 60)
 @auth_required
 def analyze(user_info):
+
     _metrics['requests'] += 1
     start = time.time()
 
-    mode = request.form.get("mode")
-    if mode not in ["jobSeeker", "recruiter"]:
-        return jsonify({"error": "Invalid mode; must be 'jobSeeker' or 'recruiter'"}), 400
-
-    resume_file = request.files.get("resume")
-    if not resume_file:
-        return jsonify({"error": "Resume file is required"}), 400
-
-    resume_text = extract_text_from_pdf(resume_file)
-    if not resume_text:
-        return jsonify({"error": "Could not extract text from resume PDF"}), 400
-
-    resume_text = resume_text[:3000]
-
-    job_desc_text = ""
-    recruiter_email = ""
-
-    if mode == "jobSeeker":
-        job_desc_text = request.form.get("jobDescription", "").strip()[:2000]
-    elif mode == "recruiter":
-         job_desc_file = request.files.get("job_description")
-         recruiter_email = request.form.get("recruiterEmail", "").strip()
-         if job_desc_file:
-             job_desc_text = extract_text_from_pdf(job_desc_file) or ""
-             job_desc_text = job_desc_text[:2000]
-         if not job_desc_text or not recruiter_email:
-             return jsonify({"error": "Job description file and recruiterEmail are required"}), 400
-
-    # Check if Redis/Celery is available
-    if REDIS_AVAILABLE:
-        # Dispatch to Celery async
-        task = run_analysis_task.delay(mode, resume_text, job_desc_text, recruiter_email, user_info)
+    # Support JSON request
+    if request.is_json:
+        data = request.json
+        mode = data.get("mode")
+        if mode not in ["jobSeeker", "recruiter"]:
+            return jsonify({"error": "Invalid mode; must be 'jobSeeker' or 'recruiter'"}), 400
         
-        elapsed = (time.time() - start) * 1000.0
-        m = _metrics['analyze']
-        m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
-        m['count'] += 1
+        resume_text = data.get("resume", "")
+        if not resume_text:
+             return jsonify({"error": "Resume text is required"}), 400
+        
+        # Limit resume length same as file extraction
+        resume_text = resume_text[:3000]
 
-        return jsonify({"task_id": task.id, "status": "processing"}), 202
+        job_desc_text = ""
+        recruiter_email = ""
+
+        if mode == "jobSeeker":
+            job_desc_text = data.get("job_description", "").strip()[:2000]
+        elif mode == "recruiter":
+             recruiter_email = data.get("recruiterEmail", "").strip()
+             job_desc_text = data.get("job_description", "").strip()[:2000]
+             if not job_desc_text or not recruiter_email:
+                 return jsonify({"error": "Job description and recruiterEmail are required"}), 400
     else:
-        # Execute synchronously when Redis is not available
-        logger.info("Executing analysis synchronously (Redis unavailable)")
-        try:
-            result = run_analysis_task(mode, resume_text, job_desc_text, recruiter_email, user_info)
-            
-            elapsed = (time.time() - start) * 1000.0
-            m = _metrics['analyze']
-            m['avgMs'] = ((m['avgMs'] * m['count']) + elapsed) / (m['count'] + 1)
-            m['count'] += 1
-            
-            return jsonify({"result": result, "status": "completed", "mode": "synchronous"}), 200
-        except Exception as e:
-            logger.error(f"Synchronous analysis failed: {e}")
-            return jsonify({"error": "Analysis failed", "details": str(e)}), 500
+        # Form Data Implementation
+        mode = request.form.get("mode")
+        if mode not in ["jobSeeker", "recruiter"]:
+            return jsonify({"error": "Invalid mode; must be 'jobSeeker' or 'recruiter'"}), 400
+
+        resume_file = request.files.get("resume")
+        if not resume_file:
+            return jsonify({"error": "Resume file is required"}), 400
+
+        resume_text = extract_text_from_pdf(resume_file)
+        if not resume_text:
+            return jsonify({"error": "Could not extract text from resume PDF"}), 400
+
+        resume_text = resume_text[:3000]
+
+        job_desc_text = ""
+        recruiter_email = ""
+
+        if mode == "jobSeeker":
+            job_desc_text = request.form.get("jobDescription", "").strip()[:2000]
+        elif mode == "recruiter":
+             job_desc_file = request.files.get("job_description")
+             recruiter_email = request.form.get("recruiterEmail", "").strip()
+             if job_desc_file:
+                 job_desc_text = extract_text_from_pdf(job_desc_file) or ""
+                 job_desc_text = job_desc_text[:2000]
+             if not job_desc_text or not recruiter_email:
+                 return jsonify({"error": "Job description file and recruiterEmail are required"}), 400
+
+    # Queue the job immediately using RQ
+    try:
+        # Import inside function to avoid circular imports
+        # Since app imports worker_tasks (indirectly via function call) and worker_tasks imports app
+        import sys
+        # Ensure root dir in path for queue_config import if running from Backend_old folder context
+        if os.path.dirname(os.path.dirname(os.path.abspath(__file__))) not in sys.path:
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        from queue_config import task_queue
+        from worker_tasks import process_resume_analysis
+
+        # Send task to Redis queue
+        job = task_queue.enqueue(
+            process_resume_analysis,
+            resume_text,
+            job_desc_text,
+            mode
+        )
+
+        _metrics['requests'] += 1
+
+        # Return instantly
+        return jsonify({
+            "status": "queued",
+            "job_id": job.id,
+            "mode": mode
+        }), 202
+
+    except Exception as e:
+        logger.error(f"Failed to queue job: {e}")
+        return jsonify({"error": "Failed to queue job", "details": str(e)}), 500
+
+@app.route("/status/<job_id>", methods=["GET"])
+def job_status(job_id):
+    try:
+        import sys
+        if os.path.dirname(os.path.dirname(os.path.abspath(__file__))) not in sys.path:
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        from rq.job import Job
+        from queue_config import redis_conn
+
+        job = Job.fetch(job_id, connection=redis_conn)
+
+        if job.is_finished:
+            return jsonify({
+                "status": "finished",
+                "result": job.result
+            })
+        elif job.is_failed:
+             return jsonify({
+                "status": "failed",
+                "error": str(job.exc_info)
+            })
+
+        return jsonify({
+            "status": job.get_status()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # =============================
-# Coaching Endpoints
+# Coaching Endpoints - existing code below
 # =============================
 
 @app.route("/coaching/save-version", methods=["POST"])
