@@ -1,0 +1,58 @@
+spec:
+  name: ai-job-screening
+  region: nyc1
+  services:
+    - name: backend
+      environment_slug: python
+      # DigitalOcean will auto-detect the Dockerfile, but explicit config is safer for params
+      dockerfile_path: Dockerfile
+      source_dir: /
+      http_port: 8000
+      instance_count: 1
+      # Basic instance ($5/mo tier is enough for starter, upgrading to $12 gives more RAM)
+      instance_size_slug: basic-xxs
+      envs:
+        - key: CELERY_BROKER_URL
+          scope: RUN_AND_BUILD_TIME
+          value: ${redis.REDIS_URL}
+        - key: CELERY_RESULT_BACKEND
+          scope: RUN_AND_BUILD_TIME
+          value: ${redis.REDIS_URL}
+        - key: FLASK_APP
+          value: Backend_old/app.py
+        - key: COHERE_API_KEY
+          value: ${COHERE_API_KEY}  # User must set this in DO Dashboard
+        - key: OPENAI_API_KEY
+          value: ${OPENAI_API_KEY}  # User must set this in DO Dashboard
+      routes:
+        - path: /
+
+    - name: worker
+      environment_slug: python
+      dockerfile_path: Dockerfile
+      source_dir: /
+      # Override the default command to run celery
+      run_command: celery -A Backend_old.app.celery worker --loglevel=info
+      instance_count: 1
+      instance_size_slug: basic-xxs
+      envs:
+        - key: CELERY_BROKER_URL
+          scope: RUN_AND_BUILD_TIME
+          value: ${redis.REDIS_URL}
+        - key: CELERY_RESULT_BACKEND
+          scope: RUN_AND_BUILD_TIME
+          value: ${redis.REDIS_URL}
+        - key: COHERE_API_KEY
+          value: ${COHERE_API_KEY}
+        - key: OPENAI_API_KEY
+          value: ${OPENAI_API_KEY}
+
+  databases:
+    - name: redis
+      engine: REDIS
+      production: true
+      version: "7"
+      # This is the smallest production Redis ($15/mo) - fits within $200 credit
+      cluster_name: usage-redis
+      num_nodes: 1
+      size: db-s-1vcpu-1gb
