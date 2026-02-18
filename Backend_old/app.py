@@ -1044,12 +1044,34 @@ def analyze(user_info):
         # Import inside function to avoid circular imports
         # Since app imports worker_tasks (indirectly via function call) and worker_tasks imports app
         import sys
-        # Ensure root dir in path for queue_config import if running from Backend_old folder context
-        if os.path.dirname(os.path.dirname(os.path.abspath(__file__))) not in sys.path:
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        import os
+        
+        # Ensure the root directory (where queue_config.py resides) is in sys.path
+        # When running on Render with root dir 'Backend_old' or similar, queue_config might be one level up
+        # or in the same level depending on how files were copied in Dockerfile.
+        
+        # Based on file structure:
+        # /app/Backend_old/app.py
+        # /app/queue_config.py  <-- likely here if COPY . . was used
+        # /app/Backend_old/queue_config.py <-- OR here if we moved it?
 
-        from queue_config import task_queue
-        from worker_tasks import process_resume_analysis
+        # Let's try to find queue_config
+        current_dir = os.path.dirname(os.path.abspath(__file__)) # .../Backend_old
+        parent_dir = os.path.dirname(current_dir) # .../
+        
+        if parent_dir not in sys.path:
+            sys.path.append(parent_dir)
+
+        try:
+            from queue_config import task_queue
+            from worker_tasks import process_resume_analysis
+        except ImportError:
+            # Fallback for when queue_config is inside Backend_old
+            from Backend_old.queue_config import task_queue
+            from Backend_old.worker_tasks import process_resume_analysis
+
+        if not task_queue:
+            raise Exception("Redis Connection failed, task_queue is None")
 
         # Send task to Redis queue
         job = task_queue.enqueue(
