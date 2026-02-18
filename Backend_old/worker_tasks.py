@@ -10,7 +10,14 @@ root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_dir not in sys.path:
     sys.path.append(root_dir)
 
-from mongo_db import analysis_collection
+try:
+    from Backend_old.mongo_db import analysis_collection
+except ImportError:
+    try:
+        from mongo_db import analysis_collection
+    except ImportError:
+        # Fallback for relative import if running as module
+        from .mongo_db import analysis_collection
 
 def process_resume_analysis(resume_text, jd_text, mode):
     """
