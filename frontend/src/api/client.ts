@@ -1,16 +1,17 @@
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://ai-job-screening-analyzer.onrender.com')
 
 
-async function pollTask(taskId: string) {
+async function pollJob(jobId: string) {
   let attempts = 0
   const maxAttempts = 120 
   while (attempts < maxAttempts) {
     await new Promise(r => setTimeout(r, 2000))
-    const res = await fetch(`${API_BASE}/tasks/${taskId}`)
+    const res = await fetch(`${API_BASE}/status/${jobId}`)
     if (res.ok) {
-       const status = await res.json()
-       if (status.state === 'SUCCESS') return status.result
-       if (status.state === 'FAILURE' || status.state === 'REVOKED') throw new Error(status.error || 'Task failed')
+       const data = await res.json()
+       if (data.status === 'finished') return data.result
+       if (data.status === 'failed') throw new Error(data.error || 'Analysis failed')
+       // If status is "queued" or "started", we keep waiting
     }
     attempts++
   }
@@ -29,10 +30,13 @@ export async function analyzeJobSeeker(token: string | null, payload: { resume: 
   })
   if (!res.ok) throw new Error(`Analyze failed: ${res.status}`)
   const data = await res.json()
-  // Handle both async (task_id) and sync (result) responses
-  if (data.task_id) {
-    return pollTask(data.task_id)
-  } else if (data.result) {
+  
+  // Handle async RQ job response
+  if (data.job_id) {
+    return pollJob(data.job_id)
+  }
+  // Handle sync response or legacy
+  if (data.result) {
     return data.result
   }
   return data
@@ -51,10 +55,11 @@ export async function analyzeRecruiter(token: string | null, payload: { resume: 
   })
   if (!res.ok) throw new Error(`Analyze failed: ${res.status}`)
   const data = await res.json()
-  // Handle both async (task_id) and sync (result) responses
-  if (data.task_id) {
-    return pollTask(data.task_id)
-  } else if (data.result) {
+  
+  if (data.job_id) {
+    return pollJob(data.job_id)
+  }
+  if (data.result) {
     return data.result
   }
   return data
