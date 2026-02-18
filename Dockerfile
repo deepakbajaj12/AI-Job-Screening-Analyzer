@@ -13,4 +13,8 @@ COPY Backend_old ./Backend_old
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "Backend_old.app:app"]
+# Make start script executable
+RUN chmod +x Backend_old/start.sh
+
+# Start both worker and server using the script
+CMD ["/bin/bash", "Backend_old/start.sh"]
