@@ -289,7 +289,7 @@ export default function JobSeeker() {
         <div className="card">
           <h3>Generated Message</h3>
           {result.subject && <p><strong>Subject:</strong> {result.subject}</p>}
-          <div className="report" style={{ whiteSpace: 'pre-wrap', background: '#f8f9fa', padding: '15px', borderRadius: '5px', border: '1px solid #ddd' }}>
+          <div className="report" style={{ whiteSpace: 'pre-wrap', background: '#f8f9fa', color: '#1f2937', padding: '15px', borderRadius: '5px', border: '1px solid #ddd' }}>
             {result.message}
           </div>
           <button 
@@ -301,7 +301,7 @@ export default function JobSeeker() {
           </button>
           
           {result.tips && (
-            <div style={{ marginTop: '20px', background: '#e9ecef', padding: '10px', borderRadius: '5px' }}>
+            <div style={{ marginTop: '20px', background: '#e9ecef', color: '#1f2937', padding: '10px', borderRadius: '5px' }}>
               <strong>💡 Tips:</strong> {result.tips}
             </div>
           )}
