@@ -2,7 +2,14 @@ services:
   - type: web
     name: ai-job-screening-api
     env: python
-    buildCommand: ""
-    # Increase timeout to 120s to prevent worker kill on slow LLM calls
-    startCommand: gunicorn --timeout 120 app:app
+    buildCommand: "pip install -r requirements.txt"
+    # Run both worker and web server in same instance for cost efficiency (Note: Not recommended for high load)
+    startCommand: "chmod +x start.sh && ./start.sh"
     plan: free
+    envVars:
+      - key: REDIS_URL
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
