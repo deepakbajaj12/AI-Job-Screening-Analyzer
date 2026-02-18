@@ -1469,42 +1469,52 @@ def mock_interview(user_info):
 
 
 @app.route('/generate-linkedin-profile', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_linkedin_profile(user_info):
     if 'resume' not in request.files:
         return jsonify({'error': 'No resume file provided'}), 400
     
-    resume_file = request.files['resume']
-    resume_text = extract_text_from_pdf(resume_file)
-    
-    prompt = f'''
-    You are an expert career consultant. Create a professional LinkedIn profile based on the resume below.
-    
-    RESUME:
-    {resume_text[:3000]}
-    
-    Return a JSON object with:
-    - headline: A catchy professional headline.
-    - about: A compelling "About" summary (max 300 words).
-    - experience_highlights: A list of 3-5 key achievements formatted for LinkedIn.
-    '''
-    
-    response = call_llm(prompt, temperature=0.7)
-    if not response:
-        return jsonify({'error': 'Failed to generate profile'}), 500
-        
     try:
-        # Try to parse JSON if the LLM returns it wrapped in code blocks
-        if "```json" in response:
-            response = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            response = response.split("```")[1].split("```")[0].strip()
-        result = json.loads(response)
-    except:
-        result = {"raw_response": response}
+        resume_file = request.files['resume']
+        resume_text = extract_text_from_pdf(resume_file)
         
-    return jsonify(result)
+        if not resume_text:
+             return jsonify({'error': 'Could not extract text from resume'}), 400
+
+        prompt = f'''
+        You are an expert career consultant. Create a professional LinkedIn profile based on the resume below.
+        
+        RESUME:
+        {resume_text[:3000]}
+        
+        Return a VALID JSON object with:
+        - headline: A catchy professional headline.
+        - about: A compelling "About" summary (max 300 words).
+        - experience_highlights: A list of string bullet points for key achievements.
+        '''
+        
+        response = call_llm(prompt, temperature=0.7)
+        if not response:
+            return jsonify({'error': 'Failed to generate profile'}), 500
+            
+        try:
+            # Try to parse JSON if the LLM returns it wrapped in code blocks
+            clean_response = response.replace("```json", "").replace("```", "").strip()
+            result = json.loads(clean_response)
+        except:
+            # If JSON parsing fails, return raw response in a way the frontend can display or debug
+            result = {
+                "headline": "Error parsing AI response",
+                "about": response, 
+                "experience_highlights": ["Could not parse structured data"]
+            }
+            
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error in generate_linkedin_profile: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/analyze-mock-interview', methods=['POST'])
 @auth_required
