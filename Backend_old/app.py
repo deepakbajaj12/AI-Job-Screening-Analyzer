@@ -13,7 +13,7 @@ import gc
 from datetime import datetime
 from collections import defaultdict
 from flask import Flask, request, jsonify, url_for, g
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
 from celery import Celery
@@ -99,7 +99,8 @@ if _origins and _origins != "*":
     # Update: Allow all origins but support credentials
     CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "methods": "*"}}, supports_credentials=True)
 else:
-    # Explicitly allow everything for public demo
+    # Explicitly allow everything for public demo with proper configuration
+    # Use wildcard for headers to ensure everything passes
     CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "methods": "*"}})
 
 APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
@@ -1799,6 +1800,7 @@ def generate_boolean_search(user_info):
     return jsonify(result)
 
 @app.route('/generate-networking-message', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_networking_message(user_info):
