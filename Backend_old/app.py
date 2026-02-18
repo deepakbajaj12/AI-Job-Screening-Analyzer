@@ -1079,25 +1079,39 @@ def analyze(user_info):
 @app.route("/status/<job_id>", methods=["GET"])
 def job_status(job_id):
     try:
-        import sys
-        if os.path.dirname(os.path.dirname(os.path.abspath(__file__))) not in sys.path:
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
         from rq.job import Job
-        from queue_config import redis_conn
+        
+        # Robust import for redis_conn
+        try:
+            from Backend_old.queue_config import redis_conn
+        except ImportError:
+            try:
+                from queue_config import redis_conn
+            except ImportError:
+                 # Fallback for when running directly inside Backend_old
+                 import sys
+                 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+                 from queue_config import redis_conn
 
         job = Job.fetch(job_id, connection=redis_conn)
 
-        if job.is_finished:
-            return jsonify({
+        if job.get_status() == "finished":
+             return jsonify({
                 "status": "finished",
                 "result": job.result
             })
-        elif job.is_failed:
+        elif job.get_status() == "failed":
              return jsonify({
                 "status": "failed",
                 "error": str(job.exc_info)
             })
+        else:
+             return jsonify({
+                "status": job.get_status()
+            })
+    except Exception as e:
+        logger.error(f"Error fetching job status: {e}")
+        return jsonify({"error": str(e)}), 500
 
         return jsonify({
             "status": job.get_status()
