@@ -96,7 +96,8 @@ if _origins and _origins != "*":
         allowed = [o.strip() for o in _origins.split(',') if o.strip()]
     except Exception:
         allowed = [_origins]
-    CORS(app, origins=allowed, supports_credentials=True)
+    # Update: Allow all origins but support credentials
+    CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "methods": "*"}}, supports_credentials=True)
 else:
     # Explicitly allow everything for public demo
     CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "methods": "*"}})
@@ -1801,45 +1802,49 @@ def generate_boolean_search(user_info):
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_networking_message(user_info):
-    data = request.get_json()
-    target_role = data.get('targetRole', '')
-    company = data.get('company', '')
-    recipient_name = data.get('recipientName', 'Hiring Manager')
-    message_type = data.get('messageType', 'linkedin_connect')
-    
-    prompt = f'''
-    Write a professional networking message for a job seeker.
-    
-    Target Role: {target_role}
-    Target Company: {company}
-    Recipient Name: {recipient_name}
-    Message Type: {message_type}
-    
-    Context:
-    - linkedin_connect: Short (under 300 chars), polite, stating intent to connect.
-    - cold_email: Professional, concise, highlighting value proposition.
-    - alumni_reachout: Friendly, mentioning shared alma mater/background.
-    
-    Return a JSON object with:
-    - subject: (If applicable, otherwise empty)
-    - message: The message body.
-    - tips: 1-2 quick tips for sending this message.
-    '''
-    
-    response = call_llm(prompt, temperature=0.6)
-    if not response:
-        return jsonify({'error': 'Failed to generate networking message'}), 500
-        
     try:
-        if "```json" in response:
-            response = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            response = response.split("```")[1].split("```")[0].strip()
-        result = json.loads(response)
-    except:
-        result = {"raw_response": response}
+        data = request.get_json()
+        target_role = data.get('targetRole', '')
+        company = data.get('company', '')
+        recipient_name = data.get('recipientName', 'Hiring Manager')
+        message_type = data.get('messageType', 'linkedin_connect')
         
-    return jsonify(result)
+        prompt = f'''
+        Write a professional networking message for a job seeker.
+        
+        Target Role: {target_role}
+        Target Company: {company}
+        Recipient Name: {recipient_name}
+        Message Type: {message_type}
+        
+        Context:
+        - linkedin_connect: Short (under 300 chars), polite, stating intent to connect.
+        - cold_email: Professional, concise, highlighting value proposition.
+        - alumni_reachout: Friendly, mentioning shared alma mater/background.
+        
+        Return a JSON object with:
+        - subject: (If applicable, otherwise empty)
+        - message: The message body.
+        - tips: 1-2 quick tips for sending this message.
+        '''
+        
+        response = call_llm(prompt, temperature=0.6)
+        if not response:
+            return jsonify({'error': 'Failed to generate networking message'}), 500
+            
+        try:
+            if "```json" in response:
+                response = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                response = response.split("```")[1].split("```")[0].strip()
+            result = json.loads(response)
+        except:
+            result = {"raw_response": response}
+            
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error in generate_networking_message: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == "__main__":
