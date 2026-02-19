@@ -116,10 +116,15 @@ export default function Recruiter() {
           <div style={{ marginTop: '10px' }}>
             <h4>Boolean String:</h4>
             <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '5px', fontFamily: 'monospace', border: '1px solid #ddd' }}>
-              {generatedSearch.boolean_string}
+              {typeof generatedSearch.boolean_string === 'string' 
+                ? generatedSearch.boolean_string 
+                : JSON.stringify(generatedSearch.boolean_string || generatedSearch.raw_response || generatedSearch)
+              }
             </div>
             <p style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
-              <strong>Strategy:</strong> {generatedSearch.explanation}
+              <strong>Strategy:</strong> {typeof generatedSearch.explanation === 'string' 
+                ? generatedSearch.explanation 
+                : (JSON.stringify(generatedSearch.explanation) || '')}
             </p>
           </div>
         )}
@@ -146,7 +151,9 @@ export default function Recruiter() {
         {generatedEmail && (
           <div style={{ marginTop: '10px' }}>
             <h4>Generated Email:</h4>
-            <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>{generatedEmail}</pre>
+            <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>
+              {typeof generatedEmail === 'string' ? generatedEmail : JSON.stringify(generatedEmail, null, 2)}
+            </pre>
           </div>
         )}
       </div>
