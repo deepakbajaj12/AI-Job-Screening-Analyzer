@@ -175,7 +175,9 @@ export default function Recruiter() {
         {generatedJD && (
           <div style={{ marginTop: '10px' }}>
             <h4>Generated Job Description:</h4>
-            <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>{generatedJD}</pre>
+            <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>
+              {typeof generatedJD === 'string' ? generatedJD : JSON.stringify(generatedJD, null, 2)}
+            </pre>
           </div>
         )}
       </div>
