@@ -1306,6 +1306,7 @@ def admin_set_role(user_info):
 # =============================
 
 @app.route('/generate-cover-letter', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_cover_letter(user_info):
@@ -1338,6 +1339,7 @@ def generate_cover_letter(user_info):
     return jsonify({'coverLetter': cover_letter})
 
 @app.route('/generate-interview-questions', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_interview_questions(user_info):
@@ -1372,6 +1374,7 @@ def generate_interview_questions(user_info):
     return jsonify({'questions': questions})
 
 @app.route('/analyze-skills', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def analyze_skills(user_info):
@@ -1422,6 +1425,7 @@ def analyze_skills(user_info):
     return jsonify(result)
 
 @app.route('/generate-email', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_email(user_info):
@@ -1443,6 +1447,7 @@ def generate_email(user_info):
     return jsonify({'email': email_content})
 
 @app.route('/mock-interview', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=20, per_seconds=60)
 def mock_interview(user_info):
@@ -1517,6 +1522,7 @@ def generate_linkedin_profile(user_info):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/analyze-mock-interview', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def analyze_mock_interview(user_info):
@@ -1561,6 +1567,7 @@ def analyze_mock_interview(user_info):
     return jsonify(result)
 
 @app.route('/estimate-salary', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def estimate_salary(user_info):
@@ -1603,6 +1610,7 @@ def estimate_salary(user_info):
     return jsonify(result)
 
 @app.route('/tailor-resume', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def tailor_resume(user_info):
@@ -1644,6 +1652,7 @@ def tailor_resume(user_info):
     return jsonify(result)
 
 @app.route('/generate-career-path', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_career_path(user_info):
@@ -1683,6 +1692,7 @@ def generate_career_path(user_info):
     return jsonify(result)
 
 @app.route('/generate-job-description', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_job_description(user_info):
@@ -1718,6 +1728,7 @@ def generate_job_description(user_info):
     return jsonify(result)
 
 @app.route('/resume-health-check', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def resume_health_check(user_info):
@@ -1776,6 +1787,7 @@ def resume_health_check(user_info):
     return jsonify(result)
 
 @app.route('/generate-boolean-search', methods=['POST'])
+@cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_boolean_search(user_info):
