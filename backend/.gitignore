@@ -31,8 +31,7 @@ node_modules
 
 # Ignore Python virtual environments
 venv/
-Backend_old/venv/
-Backend/venv/
+backend/venv/
 
 # Ignore environment files
 .env

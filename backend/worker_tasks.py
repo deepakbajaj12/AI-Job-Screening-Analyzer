@@ -3,15 +3,15 @@ import os
 from datetime import datetime
 
 # Add root directory to path so imports work correctly
-# We are assuming worker_tasks.py is now inside Backend_old/
-# So __file__ is /.../Backend_old/worker_tasks.py
+# We are assuming worker_tasks.py is now inside backend/
+# So __file__ is /.../backend/worker_tasks.py
 # Root is one level up
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_dir not in sys.path:
     sys.path.append(root_dir)
 
 try:
-    from Backend_old.mongo_db import analysis_collection
+    from backend.mongo_db import analysis_collection
 except ImportError:
     try:
         from mongo_db import analysis_collection
@@ -26,11 +26,11 @@ def process_resume_analysis(resume_text, jd_text, mode):
     """
     
     # We must delay this import to avoid circular dependencies and import errors
-    # Backend_old.app imports worker_tasks (this file)
-    # worker_tasks imports Backend_old.app
+    # backend.app imports worker_tasks (this file)
+    # worker_tasks imports backend.app
     # Moving import inside the function breaks the cycle at module level
     try:
-        from Backend_old.app import run_analysis_task
+        from backend.app import run_analysis_task
     except ImportError:
         # If running from inside Backend_old
         from app import run_analysis_task

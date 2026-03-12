@@ -17,15 +17,15 @@ print(f"conftest_dir: {conftest_dir}")
 print(f"project_root: {project_root}")
 
 # Verify project root is correct
-backend_path = os.path.join(project_root, 'Backend_old')
+backend_path = os.path.join(project_root, 'backend')
 if not os.path.exists(backend_path):
     raise RuntimeError(
-        f"Backend_old not found at {backend_path}. "
+        f"backend not found at {backend_path}. "
         f"conftest.py at: {conftest_file}, "
         f"calculated project_root: {project_root}"
     )
 
-print(f"Backend_old verified at: {backend_path}")
+print(f"backend verified at: {backend_path}")
 
 # Force project root to be first in sys.path
 while project_root in sys.path:
@@ -39,7 +39,7 @@ print(f"Changed to cwd: {os.getcwd()}")
 
 # Set environment variables BEFORE anything imports the app
 os.environ["DEV_BYPASS_AUTH"] = "1"
-os.environ["FIREBASE_CREDENTIAL_PATH"] = "Backend_old/firebase-service-account.json"
+os.environ["FIREBASE_CREDENTIAL_PATH"] = "backend/firebase-service-account.json"
 print("Environment variables set")
 
 print("=" * 70)
@@ -65,6 +65,6 @@ def pytest_configure(config):
     print(f"  Project root: {project_root}")
     print(f"  sys.path[0]: {sys.path[0]}")
     print(f"  cwd: {os.getcwd()}")
-    print(f"  Backend_old exists: {os.path.exists(os.path.join(project_root, 'Backend_old'))}")
+    print(f"  backend exists: {os.path.exists(os.path.join(project_root, 'backend'))}")
     print("=" * 70 + "\n")
 

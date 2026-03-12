@@ -23,6 +23,7 @@ export default function NavBar() {
         <Link className={loc.pathname === '/job-seeker' ? 'active' : ''} to="/job-seeker">Job Seeker</Link>
         <Link className={loc.pathname === '/recruiter' ? 'active' : ''} to="/recruiter">Recruiter</Link>
         <Link className={loc.pathname === '/coaching' ? 'active' : ''} to="/coaching">Coaching</Link>
+        <Link className={loc.pathname === '/history' ? 'active' : ''} to="/history">History</Link>
       </nav>
       <div className="right">
         <button onClick={toggleTheme} className="btn" style={{ background: 'transparent', border: '1px solid var(--muted)', padding: '6px 10px' }}>

@@ -1,6 +1,6 @@
 import os
 import sys
-# Add parent directory to path to ensure Backend_old module can be imported
+# Add parent directory to path to ensure backend module can be imported
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import json
@@ -30,9 +30,20 @@ import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# MongoDB integration
+try:
+    from backend.mongo_db import save_analysis, get_user_history, get_db
+except ImportError:
+    try:
+        from mongo_db import save_analysis, get_user_history, get_db
+    except ImportError:
+        save_analysis = lambda *a, **kw: None
+        get_user_history = lambda *a, **kw: []
+        get_db = lambda: (None, False)
+
 # Import config with fallback specifically for different deployment contexts
 try:
-    from Backend_old.config import Config, init_directories, configure_logging
+    from backend.config import Config, init_directories, configure_logging
 except ImportError:
     try:
         from config import Config, init_directories, configure_logging
@@ -89,7 +100,7 @@ except Exception as e:
     logger.warning(f"Failed to connect to Redis: {e}. Rate limiting and async tasks will be disabled.")
     redis_client = None
 
-from Backend_old.config import Config as _Cfg
+from backend.config import Config as _Cfg
 _origins = _Cfg.ALLOWED_ORIGINS
 if _origins and _origins != "*":
     try:
@@ -685,7 +696,7 @@ def compute_semantic_match(resume_text, job_text):
         logger.error(f"semantic.match_error error={e}")
         return None
 
-def generate_interview_questions(resume_excerpt, target_role, top_skills):
+def _generate_interview_questions_for_role(resume_excerpt, target_role, top_skills):
     prompt = f'''
 You are an expert technical interviewer.
 Generate a JSON object with an array field "questions" of 8 high-quality interview questions.
@@ -1041,23 +1052,18 @@ def analyze(user_info):
              if not job_desc_text or not recruiter_email:
                  return jsonify({"error": "Job description file and recruiterEmail are required"}), 400
 
-    # Queue the job immediately using RQ
+    # Try async queue first, fall back to synchronous execution
     try:
-        # Import directly assuming they are in the same package (Backend_old)
-        # or in the path.
         try:
-            from Backend_old.queue_config import task_queue
-            from Backend_old.worker_tasks import process_resume_analysis
+            from backend.queue_config import task_queue
+            from backend.worker_tasks import process_resume_analysis
         except ImportError:
-            # If running from within Backend_old as CWD
             from queue_config import task_queue
             from worker_tasks import process_resume_analysis
 
         if not task_queue:
             raise Exception("Redis Connection failed, task_queue is None")
 
-
-        # Send task to Redis queue
         job = task_queue.enqueue(
             process_resume_analysis,
             resume_text,
@@ -1066,8 +1072,6 @@ def analyze(user_info):
         )
 
         _metrics['requests'] += 1
-
-        # Return instantly
         return jsonify({
             "status": "queued",
             "job_id": job.id,
@@ -1075,8 +1079,33 @@ def analyze(user_info):
         }), 202
 
     except Exception as e:
-        logger.error(f"Failed to queue job: {e}")
-        return jsonify({"error": "Failed to queue job", "details": str(e)}), 500
+        logger.warning(f"Queue unavailable ({e}), executing synchronously")
+        # Synchronous fallback
+        result = run_analysis_task(mode, resume_text, job_desc_text, "", user_info)
+
+        # Save to MongoDB
+        save_analysis(
+            user_id=user_info.get("uid", "anonymous"),
+            mode=mode,
+            result=result,
+            resume_excerpt=resume_text[:500],
+            job_desc_excerpt=job_desc_text[:500],
+        )
+
+        elapsed = round((time.time() - start) * 1000)
+        _metrics['analyze']['count'] += 1
+        _metrics['analyze']['avgMs'] = round(
+            (_metrics['analyze']['avgMs'] * (_metrics['analyze']['count'] - 1) + elapsed) / _metrics['analyze']['count'], 1
+        )
+        write_audit(user_info.get('uid'), 'analyze', {'mode': mode, 'ms': elapsed})
+        dispatch_event('analysis.completed', {
+            'mode': mode,
+            'userId': user_info.get('uid'),
+            'matchPercentage': result.get('combinedMatchPercentage') or result.get('semanticMatchPercentage'),
+            'notifyEmail': request.form.get('recruiterEmail') if not request.is_json else (request.json or {}).get('recruiterEmail')
+        })
+
+        return jsonify(result)
 
 @app.route("/status/<job_id>", methods=["GET"])
 def job_status(job_id):
@@ -1085,12 +1114,12 @@ def job_status(job_id):
         
         # Robust import for redis_conn
         try:
-            from Backend_old.queue_config import redis_conn
+            from backend.queue_config import redis_conn
         except ImportError:
             try:
                 from queue_config import redis_conn
             except ImportError:
-                 # Fallback for when running directly inside Backend_old
+                 # Fallback for when running directly inside backend
                  import sys
                  sys.path.append(os.path.dirname(os.path.abspath(__file__)))
                  from queue_config import redis_conn
@@ -1120,6 +1149,18 @@ def job_status(job_id):
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# =============================
+# History / Dashboard Endpoint
+# =============================
+@app.route("/history", methods=["GET"])
+@auth_required
+def history(user_info):
+    user_id = user_info.get("uid")
+    limit = min(int(request.args.get("limit", "20")), 100)
+    records = get_user_history(user_id, limit=limit)
+    write_audit(user_id, 'history.view', {'count': len(records)})
+    return jsonify({"history": records, "count": len(records)})
 
 # =============================
 # Coaching Endpoints - existing code below
@@ -1203,7 +1244,7 @@ def coaching_interview_questions(user_info):
             "questions": ["Please save a resume version first to generate tailored questions."]
         })
     latest = versions[-1]
-    questions = generate_interview_questions(
+    questions = _generate_interview_questions_for_role(
         latest.get("resumeExcerpt", ""),
         target_role,
         latest.get("skills", [])[:10]

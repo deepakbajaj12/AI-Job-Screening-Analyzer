@@ -38,7 +38,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A Backend_old.app.celery worker --loglevel=info
+    command: celery -A backend.app.celery worker --loglevel=info
     env_file:
       - .env
     environment:

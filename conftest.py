@@ -30,16 +30,16 @@ print(f"Changed to directory: {os.getcwd()}")
 
 # Set test environment variables
 os.environ["DEV_BYPASS_AUTH"] = "1"
-os.environ["FIREBASE_CREDENTIAL_PATH"] = "Backend_old/firebase-service-account.json"
+os.environ["FIREBASE_CREDENTIAL_PATH"] = "backend/firebase-service-account.json"
 print("Environment variables set")
 
-# Verify Backend_old exists
-backend_path = os.path.join(project_root, 'Backend_old')
+# Verify backend exists
+backend_path = os.path.join(project_root, 'backend')
 backend_exists = os.path.exists(backend_path)
-print(f"Backend_old exists at {backend_path}: {backend_exists}")
+print(f"backend exists at {backend_path}: {backend_exists}")
 
 if not backend_exists:
-    raise RuntimeError(f"CRITICAL: Backend_old not found at {project_root}")
+    raise RuntimeError(f"CRITICAL: backend not found at {project_root}")
 
 print("=" * 70)
 print("ROOT CONFTEST.PY MODULE-LEVEL SETUP COMPLETE")
@@ -52,12 +52,12 @@ import pytest
 def root_setup():
     """Session-scoped autouse fixture to ensure setup runs before any tests."""
     print("\nROOT_SETUP FIXTURE RUNNING")
-    # Verify Backend_old can be found via importlib
+    # Verify backend can be found via importlib
     import importlib.util
-    spec = importlib.util.find_spec("Backend_old")
+    spec = importlib.util.find_spec("backend")
     if spec is None:
-        raise RuntimeError(f"Backend_old not found in sys.path: {sys.path}")
-    print(f"Backend_old found at: {spec.origin}")
+        raise RuntimeError(f"backend not found in sys.path: {sys.path}")
+    print(f"backend found at: {spec.origin}")
     yield
     print("ROOT_SETUP FIXTURE COMPLETE\n")
 
@@ -89,5 +89,5 @@ def pytest_collection(session):
     print("pytest_collection HOOK (ROOT) - RUNNING BEFORE COLLECTION")
     print("=" * 70)
     print(f"  sys.path[0]: {sys.path[0]}")
-    print(f"  Backend_old in sys.path: {project_root in sys.path}")
+    print(f"  backend in sys.path: {project_root in sys.path}")
     print("=" * 70 + "\n")

@@ -298,6 +298,14 @@ export async function generateBooleanSearch(token: string | null, payload: { job
   return res.json()
 }
 
+export async function getHistory(token: string) {
+  const res = await fetch(`${API_BASE}/history`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  if (!res.ok) throw new Error(`History fetch failed: ${res.status}`)
+  return res.json()
+}
+
 export async function generateNetworkingMessage(token: string | null, payload: { targetRole: string, company: string, recipientName: string, messageType: string }) {
   const res = await fetch(`${API_BASE}/generate-networking-message`, {
     method: 'POST',

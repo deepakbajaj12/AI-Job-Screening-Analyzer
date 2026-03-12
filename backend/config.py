@@ -11,12 +11,12 @@ class Config:
     to simplify local development while remaining 12-factor friendly in production.
     """
 
-    APP_VERSION: str = os.getenv("APP_VERSION", "0.4.6-fix-cors")
-    DEV_BYPASS_AUTH: bool = True  # Hardcoded Force Enable
-    ALLOWED_ORIGINS: str = "*"    # Hardcoded Force Enable
+    APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")
+    DEV_BYPASS_AUTH: bool = os.getenv("DEV_BYPASS_AUTH", "0").lower() in ("1", "true", "yes")
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
 
     FIREBASE_CREDENTIAL_PATH: str = os.getenv(
-        "FIREBASE_CREDENTIAL_PATH", "Backend_old/firebase-service-account.json"
+        "FIREBASE_CREDENTIAL_PATH", "backend/firebase-service-account.json"
     )
 
     COHERE_API_KEY: str | None = os.getenv("COHERE_API_KEY")
@@ -32,6 +32,8 @@ class Config:
 
     CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+
+    MONGO_URI: str | None = os.getenv("MONGO_URI")
 
     SMTP_PASS: str | None = os.getenv("SMTP_PASS")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "no-reply@example.com")

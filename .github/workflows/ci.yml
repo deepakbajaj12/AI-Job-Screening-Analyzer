@@ -19,7 +19,7 @@ jobs:
         run: |
           python -m venv venv
           . venv/bin/activate
-          pip install -r Backend_old/requirements.txt
+          pip install -r backend/requirements.txt
       - name: Verify test file and conftest files exist
         run: |
           echo "=== Checking test files ==="
@@ -54,7 +54,7 @@ jobs:
           node-version: '20'
       - name: Install deps
         run: |
-          cd Backend_old
+          cd backend
           npm install
       - name: Lint placeholder
         run: echo "Add ESLint config in future"

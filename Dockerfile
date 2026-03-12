@@ -5,16 +5,16 @@ WORKDIR /app
 # System deps (if pdf parsing or spaCy models need them)
 RUN apt-get update && apt-get install -y build-essential poppler-utils && rm -rf /var/lib/apt/lists/*
 
-COPY Backend_old/requirements.txt ./requirements.txt
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY Backend_old ./Backend_old
+COPY backend ./backend
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # Make start script executable
-RUN chmod +x Backend_old/start.sh
+RUN chmod +x backend/start.sh
 
 # Start both worker and server using the script
-CMD ["/bin/bash", "Backend_old/start.sh"]
+CMD ["/bin/bash", "backend/start.sh"]

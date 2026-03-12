@@ -5,6 +5,7 @@ import JobSeeker from './pages/JobSeeker'
 import Recruiter from './pages/Recruiter'
 import Coaching from './pages/Coaching'
 import MockInterview from './pages/MockInterview'
+import History from './pages/History'
 import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 
@@ -34,6 +35,7 @@ export default function App() {
               <Route path="/recruiter" element={<Recruiter />} />
               <Route path="/coaching" element={<Coaching />} />
               <Route path="/mock-interview" element={<MockInterview />} />
+              <Route path="/history" element={<History />} />
             </Routes>
           </ErrorBoundary>
       </main>
