@@ -11,13 +11,12 @@ if root_dir not in sys.path:
     sys.path.append(root_dir)
 
 try:
-    from backend.mongo_db import analysis_collection
+    from backend.mongo_db import get_db
 except ImportError:
     try:
-        from mongo_db import analysis_collection
+        from mongo_db import get_db
     except ImportError:
-        # Fallback for relative import if running as module
-        from .mongo_db import analysis_collection
+        from .mongo_db import get_db
 
 def process_resume_analysis(resume_text, jd_text, mode):
     """
@@ -49,14 +48,18 @@ def process_resume_analysis(resume_text, jd_text, mode):
         result = {"error": str(e)}
 
     # Save result permanently
-    if analysis_collection is not None:
-        analysis_collection.insert_one({
-            "resume": resume_text,
-            "job_description": jd_text,
-            "mode": mode,
-            "result": result,
-            "timestamp": datetime.utcnow()
-        })
+    db, available = get_db()
+    if available and db is not None:
+        try:
+            db["analysis_results"].insert_one({
+                "resume": resume_text[:500],
+                "job_description": jd_text[:500],
+                "mode": mode,
+                "result": result,
+                "createdAt": datetime.utcnow()
+            })
+        except Exception as e:
+            print(f"MongoDB save error: {e}")
     else:
         print("MongoDB not connected, skipping save")
 

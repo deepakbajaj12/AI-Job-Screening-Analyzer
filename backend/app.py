@@ -1071,7 +1071,6 @@ def analyze(user_info):
             mode
         )
 
-        _metrics['requests'] += 1
         return jsonify({
             "status": "queued",
             "job_id": job.id,
@@ -1144,12 +1143,6 @@ def job_status(job_id):
         logger.error(f"Error fetching job status: {e}")
         return jsonify({"error": str(e)}), 500
 
-        return jsonify({
-            "status": job.get_status()
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 # =============================
 # History / Dashboard Endpoint
 # =============================
@@ -1157,7 +1150,10 @@ def job_status(job_id):
 @auth_required
 def history(user_info):
     user_id = user_info.get("uid")
-    limit = min(int(request.args.get("limit", "20")), 100)
+    try:
+        limit = min(int(request.args.get("limit", "20")), 100)
+    except (ValueError, TypeError):
+        limit = 20
     records = get_user_history(user_id, limit=limit)
     write_audit(user_id, 'history.view', {'count': len(records)})
     return jsonify({"history": records, "count": len(records)})
