@@ -175,9 +175,58 @@ export default function Recruiter() {
         {generatedJD && (
           <div style={{ marginTop: '10px' }}>
             <h4>Generated Job Description:</h4>
-            <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>
-              {typeof generatedJD === 'string' ? generatedJD : JSON.stringify(generatedJD, null, 2)}
-            </pre>
+            {typeof generatedJD === 'string' ? (
+              <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>{generatedJD}</pre>
+            ) : (
+              <div className='report' style={{ padding: '20px', lineHeight: '1.6', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                <h2 style={{ marginTop: 0, color: 'var(--accent)', borderBottom: '2px solid var(--accent)', paddingBottom: '10px' }}>{generatedJD.title}</h2>
+                
+                <section style={{ marginBottom: '20px' }}>
+                  <h3 style={{ color: 'var(--fg)' }}>Overview</h3>
+                  <p style={{ color: 'var(--muted)' }}>{generatedJD.overview}</p>
+                </section>
+
+                <section style={{ marginBottom: '20px' }}>
+                  <h3 style={{ color: 'var(--fg)' }}>Key Responsibilities</h3>
+                  <ul style={{ paddingLeft: '20px' }}>
+                    {generatedJD.responsibilities?.map((item: string, i: number) => (
+                      <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section style={{ marginBottom: '20px' }}>
+                  <h3 style={{ color: 'var(--fg)' }}>Required Skills & Experience</h3>
+                  <ul style={{ paddingLeft: '20px' }}>
+                    {generatedJD.skills_and_experience?.required?.map((item: string, i: number) => (
+                      <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+
+                {generatedJD.skills_and_experience?.preferred && generatedJD.skills_and_experience.preferred.length > 0 && (
+                  <section style={{ marginBottom: '20px' }}>
+                    <h3 style={{ color: 'var(--fg)' }}>Preferred Qualifications</h3>
+                    <ul style={{ paddingLeft: '20px' }}>
+                      {generatedJD.skills_and_experience.preferred.map((item: string, i: number) => (
+                        <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {generatedJD.benefits && generatedJD.benefits.length > 0 && (
+                  <section style={{ marginBottom: '20px' }}>
+                    <h3 style={{ color: 'var(--fg)' }}>What We Offer</h3>
+                    <ul style={{ paddingLeft: '20px' }}>
+                      {generatedJD.benefits.map((item: string, i: number) => (
+                        <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
