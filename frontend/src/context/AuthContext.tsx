@@ -34,13 +34,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
+    // Dev bypass takes priority
+    if (import.meta.env.VITE_DEV_BYPASS === '1') {
+      setUser({ uid: 'dev-user', email: 'dev@example.com' })
+      setToken('dev')
+      return
+    }
+
     ensureFirebase()
     if (!auth) {
-      // Dev bypass: provide dummy token if enabled
-      if (import.meta.env.VITE_DEV_BYPASS === '1') {
-        setUser({ uid: 'dev-user', email: 'dev@example.com' })
-        setToken('dev')
-      }
       return
     }
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -54,17 +56,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     token,
     signIn: async () => {
-      ensureFirebase()
-      if (!auth) {
-        if (import.meta.env.VITE_DEV_BYPASS === '1') {
-          setUser({ uid: 'dev-user', email: 'dev@example.com' })
-          setToken('dev')
-        }
+      if (import.meta.env.VITE_DEV_BYPASS === '1') {
+        setUser({ uid: 'dev-user', email: 'dev@example.com' })
+        setToken('dev')
+        console.log('Dev bypass: auto signed in')
         return
       }
-      await signInWithPopup(auth, new GoogleAuthProvider())
+      ensureFirebase()
+      if (!auth) {
+        console.warn('Firebase not configured. Set VITE_FIREBASE_API_KEY or enable VITE_DEV_BYPASS=1')
+        alert('Sign in not configured. Please enable dev bypass or add Firebase credentials.')
+        return
+      }
+      try {
+        await signInWithPopup(auth, new GoogleAuthProvider())
+      } catch (error) {
+        console.error('Sign in failed:', error)
+        alert('Sign in failed. Check console for details.')
+      }
     },
     signOut: async () => {
+      if (import.meta.env.VITE_DEV_BYPASS === '1') {
+        setUser(null)
+        setToken(null)
+        return
+      }
       ensureFirebase()
       if (!auth) {
         setUser(null)
