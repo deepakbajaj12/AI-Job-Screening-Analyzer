@@ -108,11 +108,11 @@ if _origins and _origins != "*":
     except Exception:
         allowed = [_origins]
     # Update: Allow all origins but support credentials
-    CORS(app, resources={r"/*": {"origins": ["http://localhost:5174", "https://ai-job-screening-analyzer-ggc93dxfo-deepak-bajajs-projects.vercel.app", "http://localhost:3000"], "allow_headers": "*", "methods": "*"}}, supports_credentials=True)
+    CORS(app, resources={r"/*": {"origins": ["http://localhost:5174", "https://ai-job-screening-analyzer-ggc93dxfo-deepak-bajajs-projects.vercel.app", "https://ai-job-screening-analyzer-e2wesrjs6-deepak-bajajs-projects.vercel.app", "http://localhost:3000"], "allow_headers": "*", "methods": "*"}}, supports_credentials=True)
 else:
     # Explicitly allow everything for public demo with proper configuration
     # Use wildcard for headers to ensure everything passes
-    CORS(app, resources={r"/*": {"origins": ["http://localhost:5174", "https://ai-job-screening-analyzer-ggc93dxfo-deepak-bajajs-projects.vercel.app", "http://localhost:3000"], "allow_headers": "*", "methods": "*"}})
+    CORS(app, resources={r"/*": {"origins": ["http://localhost:5174", "https://ai-job-screening-analyzer-ggc93dxfo-deepak-bajajs-projects.vercel.app", "https://ai-job-screening-analyzer-e2wesrjs6-deepak-bajajs-projects.vercel.app", "http://localhost:3000"], "allow_headers": "*", "methods": "*"}})
 
 APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
 DEV_BYPASS_AUTH = config.DEV_BYPASS_AUTH
