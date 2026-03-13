@@ -69,10 +69,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       try {
-        await signInWithPopup(auth, new GoogleAuthProvider())
-      } catch (error) {
-        console.error('Sign in failed:', error)
-        alert('Sign in failed. Check console for details.')
+        console.log('Starting Google Sign-In with Firebase...')
+        const result = await signInWithPopup(auth, new GoogleAuthProvider())
+        console.log('Sign-in successful:', result.user.email)
+      } catch (error: any) {
+        console.error('Sign in failed - Full error:', error)
+        console.error('Error code:', error.code)
+        console.error('Error message:', error.message)
+        console.error('Firebase config:', { apiKey: firebaseConfig.apiKey ? '***set***' : 'missing', authDomain: firebaseConfig.authDomain, projectId: firebaseConfig.projectId })
+        alert(`Sign in failed: ${error.message || error.code || 'Unknown error'}. Check console for details.`)
       }
     },
     signOut: async () => {
