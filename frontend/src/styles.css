@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
 
 :root {
   --bg: #0f1117;
@@ -30,7 +30,7 @@
 * { box-sizing: border-box; }
 body { 
   margin: 0; 
-  font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif; 
   background: var(--bg); 
   color: var(--fg); 
   line-height: 1.5;
@@ -103,6 +103,11 @@ main {
   margin: 0 auto; 
 }
 
+.landing-main {
+  max-width: 100%;
+  padding: 0;
+}
+
 /* Cards */
 .card { 
   background: var(--card); 
@@ -113,7 +118,7 @@ main {
   margin-bottom: 24px;
   transition: transform 0.2s;
 }
-.card:hover { /* minimal hover effect if interactive, optional */ }
+.card:hover { transform: translateY(-1px); }
 
 .grid { 
   display: grid; 
@@ -267,6 +272,149 @@ pre {
   border-radius: var(--radius);
   color: var(--fg);
   border: 1px solid var(--border);
+}
+
+.landing-shell {
+  position: relative;
+  min-height: 100vh;
+  padding: 72px 24px 56px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 16%, rgba(20, 184, 166, 0.22), transparent 36%),
+    radial-gradient(circle at 86% 8%, rgba(245, 158, 11, 0.2), transparent 38%),
+    linear-gradient(160deg, #0d1116 0%, #111827 58%, #0f172a 100%);
+}
+
+.landing-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
+  background-size: 40px 40px;
+  -webkit-mask-image: radial-gradient(circle at center, black 42%, transparent 88%);
+  mask-image: radial-gradient(circle at center, black 42%, transparent 88%);
+}
+
+.landing-hero {
+  position: relative;
+  max-width: 860px;
+  margin: 0 auto;
+  text-align: center;
+  animation: revealUp 0.7s ease-out;
+}
+
+.landing-kicker {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #f8fafc;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.landing-hero h1 {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(2.2rem, 6vw, 4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: #f8fafc;
+}
+
+.landing-tagline {
+  margin: 16px 0 14px;
+  color: #14b8a6;
+  font-size: clamp(1.1rem, 2.6vw, 1.45rem);
+  font-weight: 700;
+}
+
+.landing-copy {
+  margin: 0 auto;
+  max-width: 720px;
+  color: #cbd5e1;
+  font-size: 1.03rem;
+}
+
+.landing-cta {
+  margin-top: 30px;
+  padding: 13px 26px;
+  font-size: 1rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #0ea5e9 0%, #14b8a6 100%);
+  box-shadow: 0 10px 20px rgba(14, 165, 233, 0.2);
+}
+
+.landing-cta:hover {
+  background: linear-gradient(90deg, #0284c7 0%, #0f766e 100%);
+}
+
+.landing-features {
+  position: relative;
+  max-width: 1120px;
+  margin: 54px auto 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.landing-feature-card {
+  background: rgba(15, 23, 42, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 20px;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  animation: revealUp 0.7s ease-out;
+}
+
+.landing-feature-card h3 {
+  margin: 0 0 10px;
+  font-size: 1.07rem;
+  color: #f8fafc;
+}
+
+.landing-feature-card p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+}
+
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 980px) {
+  .landing-features {
+    grid-template-columns: 1fr;
+    max-width: 680px;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-shell {
+    padding-top: 56px;
+  }
+
+  .landing-copy {
+    font-size: 0.96rem;
+  }
+
+  .landing-cta {
+    width: 100%;
+    max-width: 320px;
+  }
 }
 
 /* End of styles */
