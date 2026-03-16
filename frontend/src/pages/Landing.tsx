@@ -88,7 +88,6 @@ export default function Landing() {
     <div className="landing-shell">
       <div className="landing-atmosphere" aria-hidden="true" />
       <section className="landing-hero">
-        <p className="landing-kicker">Final Year Major Project</p>
         <h1>AI Job Screening & Coaching Platform</h1>
         <p className="landing-tagline">Analyze Your Resume With AI</p>
         <p className="landing-copy">
