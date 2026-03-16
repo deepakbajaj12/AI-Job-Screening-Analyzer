@@ -157,7 +157,7 @@ main {
 
 /* Inputs */
 label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 0.875rem; font-weight: 500; }
-input[type="file"], input[type="email"], input[type="text"], textarea, select { 
+input[type="file"], input[type="email"], input[type="text"], input[type="password"], input[type="tel"], textarea, select { 
   width: 100%; 
   padding: 10px 14px; 
   border-radius: var(--radius); 
@@ -353,6 +353,50 @@ pre {
   background: linear-gradient(90deg, #0284c7 0%, #0f766e 100%);
 }
 
+.landing-auth-card {
+  margin: 30px auto 0;
+  max-width: 520px;
+  text-align: left;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.landing-auth-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.landing-auth-tabs .btn {
+  flex: 1;
+}
+
+.landing-auth-tabs .btn.active {
+  border-color: #14b8a6;
+  color: #f8fafc;
+  background: rgba(20, 184, 166, 0.2);
+}
+
+.landing-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landing-auth-message {
+  margin: 12px 0 0;
+  color: #34d399;
+  font-size: 0.9rem;
+}
+
+.landing-auth-error {
+  margin: 12px 0 0;
+  color: #f87171;
+  font-size: 0.9rem;
+}
+
 .landing-features {
   position: relative;
   max-width: 1120px;
@@ -414,6 +458,10 @@ pre {
   .landing-cta {
     width: 100%;
     max-width: 320px;
+  }
+
+  .landing-auth-card {
+    max-width: 100%;
   }
 }
 

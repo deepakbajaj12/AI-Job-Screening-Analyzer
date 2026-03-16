@@ -102,17 +102,33 @@ except Exception as e:
 
 from backend.config import Config as _Cfg
 _origins = _Cfg.ALLOWED_ORIGINS
+default_origins = [
+    "http://localhost:3000",
+    "http://localhost:5174",
+    "https://ai-job-screening-analyzer.vercel.app",
+    "https://ai-job-screening-analyzer-ggc93dxfo-deepak-bajajs-projects.vercel.app",
+    "https://ai-job-screening-analyzer-e2wesrjs6-deepak-bajajs-projects.vercel.app",
+]
+
 if _origins and _origins != "*":
     try:
-        allowed = [o.strip() for o in _origins.split(',') if o.strip()]
+        allowed_origins = [o.strip() for o in _origins.split(',') if o.strip()]
     except Exception:
-        allowed = [_origins]
-    # Update: Allow all origins but support credentials
-    CORS(app, resources={r"/*": {"origins": ["http://localhost:5174", "https://ai-job-screening-analyzer-ggc93dxfo-deepak-bajajs-projects.vercel.app", "https://ai-job-screening-analyzer-e2wesrjs6-deepak-bajajs-projects.vercel.app", "http://localhost:3000"], "allow_headers": "*", "methods": "*"}}, supports_credentials=True)
+        allowed_origins = [_origins]
 else:
-    # Explicitly allow everything for public demo with proper configuration
-    # Use wildcard for headers to ensure everything passes
-    CORS(app, resources={r"/*": {"origins": ["http://localhost:5174", "https://ai-job-screening-analyzer-ggc93dxfo-deepak-bajajs-projects.vercel.app", "https://ai-job-screening-analyzer-e2wesrjs6-deepak-bajajs-projects.vercel.app", "http://localhost:3000"], "allow_headers": "*", "methods": "*"}})
+    allowed_origins = default_origins
+
+CORS(
+    app,
+    resources={
+        r"/*": {
+            "origins": allowed_origins,
+            "allow_headers": ["Authorization", "Content-Type", "X-Requested-With"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        }
+    },
+    supports_credentials=True,
+)
 
 APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
 DEV_BYPASS_AUTH = config.DEV_BYPASS_AUTH
@@ -150,6 +166,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if (OPENAI_API_KEY and OpenAI) el
 DATA_DIR = config.DATA_DIR
 COACHING_DIR = os.path.join(DATA_DIR, "coaching")
 VERSIONS_FILE = os.path.join(COACHING_DIR, "resume_versions.json")
+WELCOME_EMAILS_FILE = os.path.join(COACHING_DIR, "welcome_emails.json")
 AUDIT_DIR = os.path.join(DATA_DIR, "audit")
 EVENTS_LOG = os.path.join(AUDIT_DIR, "events.jsonl")
 AUDIT_LOG = os.path.join(AUDIT_DIR, "audit.jsonl")
@@ -163,6 +180,7 @@ if not os.path.exists(ROLES_FILE):
         json.dump({}, f)
 
 _versions_lock = threading.Lock()
+_welcome_lock = threading.Lock()
 _audit_lock = threading.Lock()
 _event_lock = threading.Lock()
 _rate_lock = threading.Lock()
@@ -274,6 +292,36 @@ def add_version(user_id, record):
         store[user_id] = versions
         _write_versions_store(store)
         return record
+
+def _read_welcome_store():
+    if not os.path.exists(WELCOME_EMAILS_FILE):
+        return {}
+    try:
+        with open(WELCOME_EMAILS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _write_welcome_store(store):
+    tmp_path = WELCOME_EMAILS_FILE + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(store, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, WELCOME_EMAILS_FILE)
+
+def has_welcome_email_been_sent(user_id):
+    store = _read_welcome_store()
+    return bool(store.get(user_id))
+
+def mark_welcome_email_sent(user_id, email):
+    with _welcome_lock:
+        store = _read_welcome_store()
+        if store.get(user_id):
+            return
+        store[user_id] = {
+            "email": email,
+            "firstSentAt": datetime.utcnow().isoformat() + "Z"
+        }
+        _write_welcome_store(store)
 
 # =============================
 # RBAC & Audit Logging
@@ -786,6 +834,39 @@ def health():
 @app.route('/version', methods=['GET'])
 def version():
     return jsonify({'version': APP_VERSION})
+
+@app.route('/auth/post-login', methods=['POST'])
+@auth_required
+def auth_post_login(user_info):
+    payload = request.get_json(silent=True) or {}
+    uid = (user_info.get('uid') or 'unknown').strip()
+    email = (payload.get('email') or user_info.get('email') or '').strip()
+    display_name = (payload.get('displayName') or user_info.get('name') or 'there').strip()
+
+    # Guest and token-less demo users should not receive onboarding emails.
+    if uid.startswith('guest-user'):
+        return jsonify({'ok': True, 'welcomeEmailSent': False, 'reason': 'guest_user'})
+
+    if not email:
+        return jsonify({'ok': True, 'welcomeEmailSent': False, 'reason': 'missing_email'})
+
+    if has_welcome_email_been_sent(uid):
+        return jsonify({'ok': True, 'welcomeEmailSent': False, 'reason': 'already_sent'})
+
+    subject = 'Welcome to AI Job Screening & Coaching Platform'
+    body = (
+        f"Hi {display_name},\n\n"
+        "Welcome to AI Job Screening & Coaching Platform.\n"
+        "You can now analyze resumes, generate recruiter content, and track coaching progress from one dashboard.\n\n"
+        "If this login was not made by you, please secure your account immediately.\n\n"
+        "Thanks,\n"
+        "AI Job Screening Team"
+    )
+
+    sent = send_email(email, subject, body)
+    if sent:
+        mark_welcome_email_sent(uid, email)
+    return jsonify({'ok': True, 'welcomeEmailSent': bool(sent)})
 
 @app.route('/metrics', methods=['GET'])
 def metrics():

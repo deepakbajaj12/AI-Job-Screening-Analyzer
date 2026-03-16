@@ -1,15 +1,45 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut as fbSignOut } from 'firebase/auth'
+import {
+  ConfirmationResult,
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  RecaptchaVerifier,
+  signInWithEmailAndPassword,
+  signInWithPhoneNumber,
+  signInWithPopup,
+  signOut as fbSignOut
+} from 'firebase/auth'
+import { postLoginWelcome } from '../api/client'
 
 type Ctx = {
-  user: { uid: string; email?: string | null } | null
+  user: { uid: string; email?: string | null; phoneNumber?: string | null } | null
   token: string | null
+  authMessage: string | null
   signIn: () => Promise<void>
+  signInWithEmail: (email: string, password: string) => Promise<void>
+  sendPhoneOtp: (phoneNumber: string) => Promise<void>
+  verifyPhoneOtp: (otp: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
-const Context = createContext<Ctx>({ user: null, token: null, signIn: async () => {}, signOut: async () => {} })
+const Context = createContext<Ctx>({
+  user: null,
+  token: null,
+  authMessage: null,
+  signIn: async () => {},
+  signInWithEmail: async () => {},
+  sendPhoneOtp: async () => {},
+  verifyPhoneOtp: async () => {},
+  signOut: async () => {}
+})
+
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier
+  }
+}
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -32,6 +62,19 @@ function ensureFirebase() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Ctx['user']>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [authMessage, setAuthMessage] = useState<string | null>(null)
+  const [phoneConfirmation, setPhoneConfirmation] = useState<ConfirmationResult | null>(null)
+
+  const ensureRecaptcha = () => {
+    ensureFirebase()
+    if (!auth) throw new Error('Firebase auth is not available')
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible'
+      })
+    }
+    return window.recaptchaVerifier
+  }
 
   useEffect(() => {
     // Dev bypass takes priority
@@ -46,8 +89,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
     const unsub = onAuthStateChanged(auth, async (u) => {
-      setUser(u ? { uid: u.uid, email: u.email } : null)
-      setToken(u ? await u.getIdToken() : null)
+      if (!u) {
+        setUser(null)
+        setToken(null)
+        return
+      }
+
+      const idToken = await u.getIdToken()
+      setUser({ uid: u.uid, email: u.email, phoneNumber: u.phoneNumber })
+      setToken(idToken)
+
+      try {
+        const welcome = await postLoginWelcome(idToken, {
+          email: u.email,
+          displayName: u.displayName,
+          phoneNumber: u.phoneNumber
+        })
+        if (welcome.welcomeEmailSent && u.email) {
+          setAuthMessage(`Welcome email sent to ${u.email}`)
+        }
+      } catch (err) {
+        console.warn('Post-login welcome notification failed:', err)
+      }
     })
     return () => unsub()
   }, [])
@@ -55,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     user,
     token,
+    authMessage,
     signIn: async () => {
       if (import.meta.env.VITE_DEV_BYPASS === '1') {
         setUser({ uid: 'dev-user', email: 'dev@example.com' })
@@ -69,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       try {
+        setAuthMessage(null)
         console.log('Starting Google Sign-In with Firebase...')
         const result = await signInWithPopup(auth, new GoogleAuthProvider())
         console.log('Sign-in successful:', result.user.email)
@@ -79,6 +144,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Firebase config:', { apiKey: firebaseConfig.apiKey ? '***set***' : 'missing', authDomain: firebaseConfig.authDomain, projectId: firebaseConfig.projectId })
         alert(`Sign in failed: ${error.message || error.code || 'Unknown error'}. Check console for details.`)
       }
+    },
+    signInWithEmail: async (email: string, password: string) => {
+      ensureFirebase()
+      if (!auth) {
+        alert('Email login is not configured. Please add Firebase credentials.')
+        return
+      }
+      setAuthMessage(null)
+      await signInWithEmailAndPassword(auth, email, password)
+    },
+    sendPhoneOtp: async (phoneNumber: string) => {
+      ensureFirebase()
+      if (!auth) {
+        alert('Phone login is not configured. Please add Firebase credentials.')
+        return
+      }
+      setAuthMessage(null)
+      const verifier = ensureRecaptcha()
+      const confirmation = await signInWithPhoneNumber(auth, phoneNumber, verifier)
+      setPhoneConfirmation(confirmation)
+      setAuthMessage('OTP sent to your phone number')
+    },
+    verifyPhoneOtp: async (otp: string) => {
+      if (!phoneConfirmation) {
+        throw new Error('Request OTP first')
+      }
+      setAuthMessage(null)
+      await phoneConfirmation.confirm(otp)
+      setPhoneConfirmation(null)
     },
     signOut: async () => {
       if (import.meta.env.VITE_DEV_BYPASS === '1') {
@@ -94,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await fbSignOut(auth)
     }
-  }), [user, token])
+  }), [authMessage, phoneConfirmation, token, user])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }

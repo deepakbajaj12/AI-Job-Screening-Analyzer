@@ -1,5 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 
 const featureCards = [
   {
@@ -17,12 +18,70 @@ const featureCards = [
 ]
 
 export default function Landing() {
-  const { signIn } = useAuth()
+  const { user, signIn, signInWithEmail, sendPhoneOtp, verifyPhoneOtp, authMessage } = useAuth()
   const navigate = useNavigate()
+  const [mode, setMode] = useState<'google' | 'email' | 'phone'>('google')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [otp, setOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (user) {
+      navigate('/')
+    }
+  }, [user, navigate])
 
   const handleSignIn = async () => {
-    await signIn()
-    navigate('/')
+    setError(null)
+    setLoading(true)
+    try {
+      await signIn()
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEmailLogin = async () => {
+    setError(null)
+    setLoading(true)
+    try {
+      await signInWithEmail(email, password)
+    } catch (err: any) {
+      setError(err?.message || 'Email sign-in failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSendOtp = async () => {
+    setError(null)
+    setLoading(true)
+    try {
+      await sendPhoneOtp(phoneNumber)
+      setOtpSent(true)
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send OTP')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    setError(null)
+    setLoading(true)
+    try {
+      await verifyPhoneOtp(otp)
+    } catch (err: any) {
+      setError(err?.message || 'Invalid OTP')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -36,7 +95,59 @@ export default function Landing() {
           A professional end-to-end platform for job seekers and recruiters, combining resume diagnostics, interview prep,
           coaching workflows, and analytics in one intelligent dashboard.
         </p>
-        <button className="btn landing-cta" onClick={handleSignIn}>Sign in with Google</button>
+
+        <div className="landing-auth-card">
+          <div className="landing-auth-tabs" aria-label="Login methods">
+            <button className={`btn secondary ${mode === 'google' ? 'active' : ''}`} onClick={() => setMode('google')}>Google</button>
+            <button className={`btn secondary ${mode === 'email' ? 'active' : ''}`} onClick={() => setMode('email')}>Email</button>
+            <button className={`btn secondary ${mode === 'phone' ? 'active' : ''}`} onClick={() => setMode('phone')}>Phone</button>
+          </div>
+
+          {mode === 'google' && (
+            <button className="btn landing-cta" onClick={handleSignIn} disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign in with Google'}
+            </button>
+          )}
+
+          {mode === 'email' && (
+            <div className="landing-auth-form">
+              <label>Email
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="recruiter@company.com" />
+              </label>
+              <label>Password
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter password" />
+              </label>
+              <button className="btn landing-cta" onClick={handleEmailLogin} disabled={loading || !email || !password}>
+                {loading ? 'Signing in...' : 'Sign in with Email'}
+              </button>
+            </div>
+          )}
+
+          {mode === 'phone' && (
+            <div className="landing-auth-form">
+              <label>Phone Number (with country code)
+                <input type="tel" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="+91XXXXXXXXXX" />
+              </label>
+              <button className="btn secondary" onClick={handleSendOtp} disabled={loading || !phoneNumber}>
+                {loading ? 'Sending...' : 'Send OTP'}
+              </button>
+              {otpSent && (
+                <>
+                  <label>Enter OTP
+                    <input type="text" value={otp} onChange={e => setOtp(e.target.value)} placeholder="6-digit code" />
+                  </label>
+                  <button className="btn landing-cta" onClick={handleVerifyOtp} disabled={loading || !otp}>
+                    {loading ? 'Verifying...' : 'Verify OTP'}
+                  </button>
+                </>
+              )}
+              <div id="recaptcha-container" />
+            </div>
+          )}
+
+          {authMessage && <p className="landing-auth-message">{authMessage}</p>}
+          {error && <p className="landing-auth-error">{error}</p>}
+        </div>
       </section>
 
       <section className="landing-features" aria-label="Key Features">

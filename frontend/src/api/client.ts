@@ -77,6 +77,22 @@ export async function getVersion(signal?: AbortSignal) {
   return res.json()
 }
 
+export async function postLoginWelcome(
+  token: string,
+  payload: { email?: string | null, displayName?: string | null, phoneNumber?: string | null }
+) {
+  const res = await fetch(`${API_BASE}/auth/post-login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`Post login failed: ${res.status}`)
+  return res.json() as Promise<{ ok: boolean, welcomeEmailSent: boolean, reason?: string }>
+}
+
 // Auth-protected coaching APIs (token required; dev mode may accept dummy token)
 export async function coachingSaveVersion(token: string, payload: { resume: File, jobDescription?: File | string }) {
   const form = new FormData()
