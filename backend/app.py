@@ -123,7 +123,7 @@ CORS(
     resources={
         r"/*": {
             "origins": allowed_origins,
-            "allow_headers": ["Authorization", "Content-Type", "X-Requested-With"],
+            "allow_headers": "*",
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         }
     },
@@ -771,6 +771,9 @@ Top Skills: {', '.join(top_skills)}
 def auth_required(fn):
     """Decorator-like helper for token verification inside route bodies."""
     def wrapper(*args, **kwargs):
+        if request.method == "OPTIONS":
+            return app.make_default_options_response()
+
         if config.DEV_BYPASS_AUTH:
             # Inject mock user
             return fn({"uid": "dev-user", "email": "dev@local"}, *args, **kwargs)
@@ -795,6 +798,9 @@ def index():
 
 @app.before_request
 def start_request_tracing():
+    if request.method == "OPTIONS":
+        return app.make_default_options_response()
+
     # 1. Capture or generate Request ID
     req_id = request.headers.get("X-Request-ID")
     if not req_id:
@@ -835,7 +841,7 @@ def health():
 def version():
     return jsonify({'version': APP_VERSION})
 
-@app.route('/auth/post-login', methods=['POST'])
+@app.route('/auth/post-login', methods=['POST', 'OPTIONS'])
 @auth_required
 def auth_post_login(user_info):
     payload = request.get_json(silent=True) or {}

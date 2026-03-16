@@ -48,6 +48,21 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 }
 
+const CANONICAL_APP_URL = (import.meta.env.VITE_CANONICAL_APP_URL || 'https://ai-job-screening-analyzer.vercel.app').replace(/\/$/, '')
+
+function getCanonicalRedirectUrl() {
+  try {
+    const target = new URL(CANONICAL_APP_URL)
+    const current = window.location
+    if (current.hostname !== target.hostname) {
+      return `${target.origin}${current.pathname}${current.search}${current.hash}`
+    }
+  } catch {
+    // Invalid canonical URL should not block auth flow.
+  }
+  return null
+}
+
 let appInited = false
 let auth: ReturnType<typeof getAuth> | null = null
 function ensureFirebase() {
@@ -132,6 +147,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         alert('Sign in not configured. Please enable dev bypass or add Firebase credentials.')
         return
       }
+
+      const redirectUrl = getCanonicalRedirectUrl()
+      if (redirectUrl) {
+        setAuthMessage('Redirecting to secure login domain...')
+        window.location.assign(redirectUrl)
+        return
+      }
+
       try {
         setAuthMessage(null)
         console.log('Starting Google Sign-In with Firebase...')
@@ -142,6 +165,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error code:', error.code)
         console.error('Error message:', error.message)
         console.error('Firebase config:', { apiKey: firebaseConfig.apiKey ? '***set***' : 'missing', authDomain: firebaseConfig.authDomain, projectId: firebaseConfig.projectId })
+        if (error?.code === 'auth/unauthorized-domain') {
+          setAuthMessage(`This URL is not allowed by Firebase. Open ${CANONICAL_APP_URL} to sign in.`)
+        }
         alert(`Sign in failed: ${error.message || error.code || 'Unknown error'}. Check console for details.`)
       }
     },
