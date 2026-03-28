@@ -26,7 +26,12 @@ export default function Coaching() {
       try {
         const p = await coachingProgress(token)
         setProgress(p)
-        try { const s = await coachingStudyPack(token); setStudy(s) } catch {}
+        try {
+          const s = await coachingStudyPack(token)
+          setStudy(s)
+        } catch {
+          setStudy(null)
+        }
       } catch (e: any) { setError(e?.message || 'Failed to load coaching') }
     })()
   }, [token])
@@ -77,7 +82,7 @@ export default function Coaching() {
     if (!token || !resumeFile) { setError('Select a resume file'); return }
     setLoading(true); setError(null)
     try {
-      const res = await coachingSaveVersion(token, { resume: resumeFile, jobDescription: jdText })
+      await coachingSaveVersion(token, { resume: resumeFile, jobDescription: jdText })
       setProgress(await coachingProgress(token))
       setStudy(await coachingStudyPack(token))
     } catch (err: any) { setError(err?.message || 'Save version failed') }
@@ -137,7 +142,7 @@ export default function Coaching() {
                 <span key={i} className="chip">{g}</span>
               ))}
             </div>
-            <p style={{ marginTop:12 }}>Resources:</p>
+            <p className="study-resources-label">Resources:</p>
             <div className="grid">
               {filteredStudyPack.map((item:any, i:number) => (
                 <div key={i} className="card resource">

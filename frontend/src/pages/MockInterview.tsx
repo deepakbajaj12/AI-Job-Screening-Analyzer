@@ -17,7 +17,7 @@ export default function MockInterview() {
       alert('Speech recognition is not supported in this browser. Try Chrome.')
       return
     }
-    // @ts-ignore
+    // @ts-expect-error - Vendor-prefixed SpeechRecognition exists in some browsers.
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const recognition = new SpeechRecognition()
     recognition.continuous = false
@@ -85,32 +85,15 @@ export default function MockInterview() {
         </label>
       </div>
 
-      <div className="card" style={{ height: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {history.length === 0 && <p style={{ color: '#666', textAlign: 'center' }}>Start the interview by saying hello!</p>}
+      <div className="card interview-chat-log">
+        {history.length === 0 && <p className="interview-empty">Start the interview by saying hello!</p>}
         {history.map((msg, i) => (
-          <div key={i} style={{ 
-            alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-            background: msg.sender === 'user' ? '#007bff' : '#f0f0f0',
-            color: msg.sender === 'user' ? 'white' : 'black',
-            padding: '8px 12px',
-            borderRadius: '12px',
-            maxWidth: '70%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '5px'
-          }}>
+          <div key={i} className={`interview-msg ${msg.sender === 'user' ? 'interview-msg-user' : 'interview-msg-ai'}`}>
             <div><strong>{msg.sender === 'user' ? 'You' : 'Interviewer'}:</strong> {msg.text}</div>
             {msg.sender === 'ai' && (
               <button 
                 onClick={() => speak(msg.text)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.2em',
-                  alignSelf: 'flex-start',
-                  padding: 0
-                }}
+                className="interview-speak-btn"
                 title="Read aloud"
               >
                 🔊
@@ -118,16 +101,15 @@ export default function MockInterview() {
             )}
           </div>
         ))}
-        {loading && <div style={{ alignSelf: 'flex-start', color: '#666' }}>Interviewer is typing...</div>}
+        {loading && <div className="interview-typing">Interviewer is typing...</div>}
       </div>
 
-      <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+      <form onSubmit={handleSend} className="interview-form">
         <button 
           type="button" 
-          className="btn" 
           onClick={startListening} 
           disabled={loading || isListening}
-          style={{ background: isListening ? '#dc3545' : '#17a2b8' }}
+          className={`btn interview-mic-btn ${isListening ? 'listening' : ''}`}
           title="Speak answer"
         >
           {isListening ? '🛑' : '🎤'}
@@ -137,16 +119,16 @@ export default function MockInterview() {
           value={message} 
           onChange={e => setMessage(e.target.value)} 
           placeholder="Type your answer..." 
-          style={{ flex: 1 }}
+          className="interview-input"
           disabled={loading}
         />
         <button className="btn" disabled={loading}>Send</button>
-        <button type="button" className="btn" onClick={handleEndInterview} disabled={loading || history.length === 0} style={{ background: '#28a745' }}>End & Get Feedback</button>
+        <button type="button" className="btn interview-end-btn" onClick={handleEndInterview} disabled={loading || history.length === 0}>End & Get Feedback</button>
       </form>
       {error && <div className="error">{error}</div>}
 
       {feedback && (
-        <div className="card" style={{ marginTop: '20px' }}>
+        <div className="card interview-feedback-card">
           <h3>Interview Feedback</h3>
           <div className="report">
             <h4>Score: {feedback.score}/100</h4>

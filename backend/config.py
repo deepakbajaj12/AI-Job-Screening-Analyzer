@@ -38,6 +38,7 @@ class Config:
     SMTP_PASS: str | None = os.getenv("SMTP_PASS")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "no-reply@example.com")
     WEBHOOK_URL: str | None = os.getenv("WEBHOOK_URL")
+    WEBHOOK_SECRET: str | None = os.getenv("WEBHOOK_SECRET")
 
 
 def init_directories(config: Config) -> None:

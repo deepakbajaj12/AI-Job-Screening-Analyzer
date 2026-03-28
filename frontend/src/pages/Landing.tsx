@@ -18,14 +18,11 @@ const featureCards = [
 ]
 
 export default function Landing() {
-  const { user, signIn, signInWithEmail, sendPhoneOtp, verifyPhoneOtp, authMessage } = useAuth()
+  const { user, signIn, signInWithEmail, authMessage } = useAuth()
   const navigate = useNavigate()
-  const [mode, setMode] = useState<'google' | 'email' | 'phone'>('google')
+  const [mode, setMode] = useState<'google' | 'email'>('google')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
-  const [otp, setOtp] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,31 +56,6 @@ export default function Landing() {
     }
   }
 
-  const handleSendOtp = async () => {
-    setError(null)
-    setLoading(true)
-    try {
-      await sendPhoneOtp(phoneNumber)
-      setOtpSent(true)
-    } catch (err: any) {
-      setError(err?.message || 'Failed to send OTP')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerifyOtp = async () => {
-    setError(null)
-    setLoading(true)
-    try {
-      await verifyPhoneOtp(otp)
-    } catch (err: any) {
-      setError(err?.message || 'Invalid OTP')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <div className="landing-shell">
       <div className="landing-atmosphere" aria-hidden="true" />
@@ -99,7 +71,6 @@ export default function Landing() {
           <div className="landing-auth-tabs" aria-label="Login methods">
             <button className={`btn secondary ${mode === 'google' ? 'active' : ''}`} onClick={() => setMode('google')}>Google</button>
             <button className={`btn secondary ${mode === 'email' ? 'active' : ''}`} onClick={() => setMode('email')}>Email</button>
-            <button className={`btn secondary ${mode === 'phone' ? 'active' : ''}`} onClick={() => setMode('phone')}>Phone</button>
           </div>
 
           {mode === 'google' && (
@@ -119,28 +90,6 @@ export default function Landing() {
               <button className="btn landing-cta" onClick={handleEmailLogin} disabled={loading || !email || !password}>
                 {loading ? 'Signing in...' : 'Sign in with Email'}
               </button>
-            </div>
-          )}
-
-          {mode === 'phone' && (
-            <div className="landing-auth-form">
-              <label>Phone Number (with country code)
-                <input type="tel" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="+91XXXXXXXXXX" />
-              </label>
-              <button className="btn secondary" onClick={handleSendOtp} disabled={loading || !phoneNumber}>
-                {loading ? 'Sending...' : 'Send OTP'}
-              </button>
-              {otpSent && (
-                <>
-                  <label>Enter OTP
-                    <input type="text" value={otp} onChange={e => setOtp(e.target.value)} placeholder="6-digit code" />
-                  </label>
-                  <button className="btn landing-cta" onClick={handleVerifyOtp} disabled={loading || !otp}>
-                    {loading ? 'Verifying...' : 'Verify OTP'}
-                  </button>
-                </>
-              )}
-              <div id="recaptcha-container" />
             </div>
           )}
 

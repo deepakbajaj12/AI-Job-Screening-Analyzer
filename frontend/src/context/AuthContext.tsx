@@ -188,9 +188,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setAuthMessage(null)
       const verifier = ensureRecaptcha()
-      const confirmation = await signInWithPhoneNumber(auth, phoneNumber, verifier)
-      setPhoneConfirmation(confirmation)
-      setAuthMessage('OTP sent to your phone number')
+      try {
+        const confirmation = await signInWithPhoneNumber(auth, phoneNumber, verifier)
+        setPhoneConfirmation(confirmation)
+        setAuthMessage('OTP sent to your phone number')
+      } catch (err) {
+        // Clear the cached verifier so a fresh one is created on the next attempt.
+        // A used or failed verifier cannot be reused.
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear()
+          window.recaptchaVerifier = undefined
+        }
+        throw err
+      }
     },
     verifyPhoneOtp: async (otp: string) => {
       if (!phoneConfirmation) {

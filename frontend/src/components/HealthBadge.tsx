@@ -16,7 +16,7 @@ export default function HealthBadge() {
         else setStatus('down')
         if (v.status === 'fulfilled') setVersion(v.value.version)
       })
-      .catch((e) => {
+      .catch(() => {
         if (!controller.signal.aborted) setStatus('down')
       })
     return () => { controller.abort() }

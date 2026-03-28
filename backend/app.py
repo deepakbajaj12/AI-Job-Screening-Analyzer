@@ -7,6 +7,8 @@ import json
 import re
 import uuid
 import time
+import hmac
+import hashlib
 import threading
 import socket
 import gc
@@ -245,7 +247,9 @@ def rate_limit(max_requests=30, per_seconds=60, key_fn=None):
             else:
                 # In-memory Fallback
                 with _rate_lock:
-                    bucket = _rate_buckets[ident]
+                    # Match Redis behavior by isolating limits per identity and endpoint.
+                    bucket_key = f"{ident}:{fn.__name__}"
+                    bucket = _rate_buckets[bucket_key]
                     # purge old
                     cutoff = now - per_seconds
                     while bucket and bucket[0] < cutoff:
@@ -342,8 +346,13 @@ def write_audit(user_id, action, meta=None):
         'meta': meta or {}
     }
     with _audit_lock:
-        with open(AUDIT_LOG, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        try:
+            os.makedirs(os.path.dirname(AUDIT_LOG), exist_ok=True)
+            with open(AUDIT_LOG, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        except OSError as exc:
+            # Audit logging should never break request handling.
+            logger.warning("audit.write_failed path=%s error=%s", AUDIT_LOG, exc)
 
 def require_role(required_roles):
     def decorator(fn):
@@ -365,6 +374,7 @@ SMTP_USER = config.SMTP_USER
 SMTP_PASS = config.SMTP_PASS
 EMAIL_FROM = config.EMAIL_FROM
 WEBHOOK_URL = config.WEBHOOK_URL
+WEBHOOK_SECRET = config.WEBHOOK_SECRET
 
 def send_email(to_addr, subject, body):
     if not (SMTP_HOST and SMTP_USER and SMTP_PASS):
@@ -388,8 +398,24 @@ def send_email(to_addr, subject, body):
 def post_webhook(event_type, payload):
     if not WEBHOOK_URL:
         return False
+
+    event_body = {'event': event_type, 'payload': payload}
+    headers = {'Content-Type': 'application/json'}
+
+    if WEBHOOK_SECRET:
+        timestamp = str(int(time.time()))
+        body_json = json.dumps(event_body, ensure_ascii=False, separators=(',', ':'), sort_keys=True)
+        signed_payload = f"{timestamp}.{body_json}"
+        signature = hmac.new(
+            WEBHOOK_SECRET.encode('utf-8'),
+            signed_payload.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        headers['X-Webhook-Timestamp'] = timestamp
+        headers['X-Webhook-Signature'] = signature
+
     try:
-        r = requests.post(WEBHOOK_URL, json={'event': event_type, 'payload': payload}, timeout=5)
+        r = requests.post(WEBHOOK_URL, json=event_body, headers=headers, timeout=5)
         return r.status_code < 400
     except Exception as e:
         logger.error(f"webhook.error error={e}")
