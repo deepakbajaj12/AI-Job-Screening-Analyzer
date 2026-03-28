@@ -1,20 +1,21 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
 import App from './App'
 
+vi.mock('./context/AuthContext', () => ({
+  useAuth: () => ({ user: null })
+}))
+
 describe('App', () => {
-  it('renders navigation links', () => {
+  it('renders landing screen when user is not authenticated', () => {
     render(
       <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
+        <App />
       </BrowserRouter>
     )
-    expect(screen.getByRole('link', { name: /AI Job Screening/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Job Seeker/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Recruiter/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /AI Job Screening & Coaching Platform/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Sign in with Google/i })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /Key Features/i })).toBeInTheDocument()
   })
 })
