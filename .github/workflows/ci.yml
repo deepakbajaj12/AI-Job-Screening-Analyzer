@@ -7,6 +7,39 @@ on:
     branches: [ master, main ]
 
 jobs:
+  stale-pr-head-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR head freshness
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MAX_BEHIND_COMMITS: '0'
+        run: |
+          set -euo pipefail
+          echo "Base ref: ${BASE_REF}"
+          echo "Base sha: ${BASE_SHA}"
+          echo "Head sha: ${HEAD_SHA}"
+
+          # Ensure base branch history is available even on shallow or detached checkouts.
+          git fetch --no-tags --prune origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
+          BEHIND_COUNT=$(git rev-list --count "${HEAD_SHA}..${BASE_SHA}")
+          echo "PR head is behind base by ${BEHIND_COUNT} commit(s)."
+
+          if [ "${BEHIND_COUNT}" -gt "${MAX_BEHIND_COMMITS}" ]; then
+            echo "::error::PR head is stale by ${BEHIND_COUNT} commit(s). Rebase or merge ${BASE_REF} into this PR branch."
+            exit 1
+          fi
+
+          echo "PR head is up to date with base branch."
+
   backend-python:
     runs-on: ubuntu-latest
     steps:
