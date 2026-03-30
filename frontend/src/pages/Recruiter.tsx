@@ -13,6 +13,21 @@ import {
 } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
+type GeneratedJDObject = {
+  title?: string
+  overview?: string
+  responsibilities?: string[]
+  skills_and_experience?: {
+    required?: string[]
+    preferred?: string[]
+  }
+  benefits?: string[]
+}
+
+function isGeneratedJDObject(value: string | GeneratedJDObject): value is GeneratedJDObject {
+  return typeof value !== 'string'
+}
+
 export default function Recruiter() {
   const { token } = useAuth()
   const [resume, setResume] = useState<File | null>(null)
@@ -32,7 +47,7 @@ export default function Recruiter() {
   const [jdTitle, setJdTitle] = useState('')
   const [jdSkills, setJdSkills] = useState('')
   const [jdExperience, setJdExperience] = useState('')
-  const [generatedJD, setGeneratedJD] = useState('')
+  const [generatedJD, setGeneratedJD] = useState<string | GeneratedJDObject>('')
 
   // Boolean Search State
   const [searchJD, setSearchJD] = useState('')
@@ -268,7 +283,7 @@ export default function Recruiter() {
 
       <div className='card'>
         <h3>Smart Boolean Search Generator</h3>
-        <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+        <div className='recruiter-stack'>
           <label>Job Description / Requirements
             <textarea 
               rows={4} 
@@ -280,15 +295,15 @@ export default function Recruiter() {
           <button className='btn' onClick={handleGenerateSearch} disabled={actionsBlocked}>Generate Boolean String</button>
         </div>
         {generatedSearch && (
-          <div style={{ marginTop: '10px' }}>
+          <div className='recruiter-section-gap'>
             <h4>Boolean String:</h4>
-            <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '5px', fontFamily: 'monospace', border: '1px solid #ddd' }}>
+            <div className='recruiter-mono-box'>
               {typeof generatedSearch.boolean_string === 'string' 
                 ? generatedSearch.boolean_string 
                 : JSON.stringify(generatedSearch.boolean_string || generatedSearch.raw_response || generatedSearch)
               }
             </div>
-            <p style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
+            <p className='recruiter-strategy-text'>
               <strong>Strategy:</strong> {typeof generatedSearch.explanation === 'string' 
                 ? generatedSearch.explanation 
                 : (JSON.stringify(generatedSearch.explanation) || '')}
@@ -299,7 +314,7 @@ export default function Recruiter() {
 
       <div className='card'>
         <h3>Email Assistant</h3>
-        <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+        <div className='recruiter-stack'>
           <label>Candidate Name
             <input type='text' value={candidateName} onChange={e => setCandidateName(e.target.value)} />
           </label>
@@ -316,12 +331,12 @@ export default function Recruiter() {
           <button className='btn' onClick={handleGenerateEmail} disabled={actionsBlocked}>Generate Email</button>
         </div>
         {generatedEmail && (
-          <div style={{ marginTop: '10px' }}>
+          <div className='recruiter-section-gap'>
             <h4>Generated Email:</h4>
-            <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>
+            <pre className='report recruiter-pre-wrap'>
               {typeof generatedEmail === 'string' ? generatedEmail : JSON.stringify(generatedEmail, null, 2)}
             </pre>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div className='recruiter-actions-row'>
               <input
                 type='text'
                 value={emailTemplateTitle}
@@ -337,7 +352,7 @@ export default function Recruiter() {
 
       <div className='card'>
         <h3>Job Description Generator</h3>
-        <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+        <div className='recruiter-stack'>
           <label>Job Title
             <input type='text' value={jdTitle} onChange={e => setJdTitle(e.target.value)} placeholder="e.g. Senior React Developer" />
           </label>
@@ -350,61 +365,62 @@ export default function Recruiter() {
           <button className='btn' onClick={handleGenerateJD} disabled={actionsBlocked}>Generate JD</button>
         </div>
         {generatedJD && (
-          <div style={{ marginTop: '10px' }}>
+          <div className='recruiter-section-gap'>
             <h4>Generated Job Description:</h4>
             {typeof generatedJD === 'string' ? (
-              <pre className='report' style={{ whiteSpace: 'pre-wrap' }}>{generatedJD}</pre>
-            ) : (
-              <div className='report' style={{ padding: '20px', lineHeight: '1.6', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-                <h2 style={{ marginTop: 0, color: 'var(--accent)', borderBottom: '2px solid var(--accent)', paddingBottom: '10px' }}>{generatedJD.title}</h2>
+              <pre className='report recruiter-pre-wrap'>{generatedJD}</pre>
+            ) : isGeneratedJDObject(generatedJD) ? (
+              <div className='report recruiter-jd-card'>
+                <h2 className='recruiter-jd-title'>{generatedJD.title}</h2>
                 
-                <section style={{ marginBottom: '20px' }}>
-                  <h3 style={{ color: 'var(--fg)' }}>Overview</h3>
-                  <p style={{ color: 'var(--muted)' }}>{generatedJD.overview}</p>
+                <section className='recruiter-jd-section'>
+                  <h3 className='recruiter-jd-subtitle'>Overview</h3>
+                  <p className='recruiter-muted-text'>{generatedJD.overview}</p>
                 </section>
 
-                <section style={{ marginBottom: '20px' }}>
-                  <h3 style={{ color: 'var(--fg)' }}>Key Responsibilities</h3>
-                  <ul style={{ paddingLeft: '20px' }}>
+                <section className='recruiter-jd-section'>
+                  <h3 className='recruiter-jd-subtitle'>Key Responsibilities</h3>
+                  <ul className='recruiter-list'>
                     {generatedJD.responsibilities?.map((item: string, i: number) => (
-                      <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                      <li key={i} className='recruiter-list-item'>{item}</li>
                     ))}
                   </ul>
                 </section>
 
-                <section style={{ marginBottom: '20px' }}>
-                  <h3 style={{ color: 'var(--fg)' }}>Required Skills & Experience</h3>
-                  <ul style={{ paddingLeft: '20px' }}>
+                <section className='recruiter-jd-section'>
+                  <h3 className='recruiter-jd-subtitle'>Required Skills & Experience</h3>
+                  <ul className='recruiter-list'>
                     {generatedJD.skills_and_experience?.required?.map((item: string, i: number) => (
-                      <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                      <li key={i} className='recruiter-list-item'>{item}</li>
                     ))}
                   </ul>
                 </section>
 
                 {generatedJD.skills_and_experience?.preferred && generatedJD.skills_and_experience.preferred.length > 0 && (
-                  <section style={{ marginBottom: '20px' }}>
-                    <h3 style={{ color: 'var(--fg)' }}>Preferred Qualifications</h3>
-                    <ul style={{ paddingLeft: '20px' }}>
+                  <section className='recruiter-jd-section'>
+                    <h3 className='recruiter-jd-subtitle'>Preferred Qualifications</h3>
+                    <ul className='recruiter-list'>
                       {generatedJD.skills_and_experience.preferred.map((item: string, i: number) => (
-                        <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                        <li key={i} className='recruiter-list-item'>{item}</li>
                       ))}
                     </ul>
                   </section>
                 )}
 
                 {generatedJD.benefits && generatedJD.benefits.length > 0 && (
-                  <section style={{ marginBottom: '20px' }}>
-                    <h3 style={{ color: 'var(--fg)' }}>What We Offer</h3>
-                    <ul style={{ paddingLeft: '20px' }}>
+                  <section className='recruiter-jd-section'>
+                    <h3 className='recruiter-jd-subtitle'>What We Offer</h3>
+                    <ul className='recruiter-list'>
                       {generatedJD.benefits.map((item: string, i: number) => (
-                        <li key={i} style={{ marginBottom: '8px', color: 'var(--muted)' }}>{item}</li>
+                        <li key={i} className='recruiter-list-item'>{item}</li>
                       ))}
                     </ul>
                   </section>
                 )}
               </div>
-            )}
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+            ) : null
+            }
+            <div className='recruiter-actions-row recruiter-actions-top'>
               <input
                 type='text'
                 value={jdTemplateTitle}
@@ -420,9 +436,9 @@ export default function Recruiter() {
 
       <div className='card'>
         <h3>Reusable Templates</h3>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
-          <label style={{ marginBottom: 0 }}>Filter</label>
-          <select value={templateFilter} onChange={e => setTemplateFilter(e.target.value as 'all' | 'email' | 'job_description')}>
+        <div className='recruiter-toolbar'>
+          <label htmlFor='template-filter' className='recruiter-label-inline'>Filter</label>
+          <select id='template-filter' aria-label='Template Filter' value={templateFilter} onChange={e => setTemplateFilter(e.target.value as 'all' | 'email' | 'job_description')}>
             <option value='all'>All</option>
             <option value='email'>Email</option>
             <option value='job_description'>Job Description</option>
@@ -431,14 +447,14 @@ export default function Recruiter() {
         </div>
 
         {templates.length === 0 ? (
-          <p style={{ color: 'var(--muted)' }}>No templates saved yet.</p>
+          <p className='recruiter-muted-text'>No templates saved yet.</p>
         ) : (
           <div className='grid'>
             {templates.map((item) => (
-              <div key={item.id} className='card' style={{ marginBottom: 0 }}>
+              <div key={item.id} className='card recruiter-card-flat'>
                 <h4>{item.title}</h4>
-                <p style={{ color: 'var(--muted)' }}>Type: {item.kind === 'email' ? 'Email' : 'Job Description'}</p>
-                <p style={{ color: 'var(--muted)' }}>Latest version: v{item.latestVersion}</p>
+                <p className='recruiter-muted-text'>Type: {item.kind === 'email' ? 'Email' : 'Job Description'}</p>
+                <p className='recruiter-muted-text'>Latest version: v{item.latestVersion}</p>
                 <p>{item.preview}</p>
                 <button className='btn secondary' onClick={() => openTemplate(item.id)} disabled={actionsBlocked}>View Versions</button>
               </div>
@@ -447,11 +463,11 @@ export default function Recruiter() {
         )}
 
         {selectedTemplate && (
-          <div style={{ marginTop: '14px' }}>
+          <div className='recruiter-selected-template'>
             <h4>{selectedTemplate.title} - Version History</h4>
             <div className='grid'>
               {[...selectedTemplate.versions].reverse().map((v) => (
-                <div key={v.version} className='card' style={{ marginBottom: 0 }}>
+                <div key={v.version} className='card recruiter-card-flat'>
                   <p><strong>v{v.version}</strong> - {new Date(v.createdAt).toLocaleString()}</p>
                   <button className='btn secondary' onClick={() => applyTemplateVersion(selectedTemplate, v.version)} disabled={actionsBlocked}>Use this version</button>
                 </div>

@@ -506,6 +506,100 @@ pre {
   font-size: 0.95rem;
 }
 
+.recruiter-stack {
+  display: flex;
+  gap: 10px;
+  flex-direction: column;
+}
+
+.recruiter-section-gap {
+  margin-top: 10px;
+}
+
+.recruiter-mono-box {
+  background: #f8f9fa;
+  color: #111827;
+  padding: 10px;
+  border-radius: 5px;
+  font-family: monospace;
+  border: 1px solid #ddd;
+}
+
+.recruiter-strategy-text {
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.recruiter-pre-wrap {
+  white-space: pre-wrap;
+}
+
+.recruiter-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recruiter-actions-top {
+  margin-top: 8px;
+}
+
+.recruiter-jd-card {
+  padding: 20px;
+  line-height: 1.6;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.recruiter-jd-title {
+  margin-top: 0;
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 10px;
+}
+
+.recruiter-jd-section {
+  margin-bottom: 20px;
+}
+
+.recruiter-jd-subtitle {
+  color: var(--fg);
+}
+
+.recruiter-muted-text {
+  color: var(--muted);
+}
+
+.recruiter-list {
+  padding-left: 20px;
+}
+
+.recruiter-list-item {
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.recruiter-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.recruiter-label-inline {
+  margin-bottom: 0;
+}
+
+.recruiter-card-flat {
+  margin-bottom: 0;
+}
+
+.recruiter-selected-template {
+  margin-top: 14px;
+}
+
 @keyframes revealUp {
   from {
     opacity: 0;
