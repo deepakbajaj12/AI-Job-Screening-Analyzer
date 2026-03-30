@@ -1,5 +1,74 @@
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://ai-job-screening-analyzer.onrender.com')
 
+export class ApiError extends Error {
+  status: number
+  code?: string
+  retryAfterSeconds?: number
+
+  constructor(message: string, status: number, code?: string, retryAfterSeconds?: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function readErrorPayload(res: Response): Promise<{ message: string, code?: string, retryAfterSeconds?: number }> {
+  try {
+    const data = await res.json()
+    const message = data?.message || data?.error || `Request failed: ${res.status}`
+    const code = data?.error
+    const retryAfterSeconds = Number(data?.retryAfterSeconds)
+    return {
+      message,
+      code,
+      retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+    }
+  } catch {
+    return { message: `Request failed: ${res.status}` }
+  }
+}
+
+async function fetchJsonWithRetry(
+  url: string,
+  init: RequestInit,
+  options?: { retries?: number, baseDelayMs?: number }
+) {
+  const retries = options?.retries ?? 2
+  const baseDelayMs = options?.baseDelayMs ?? 500
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, init)
+      if (res.ok) return res.json()
+
+      const payload = await readErrorPayload(res)
+      const retryable = res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504
+      if (retryable && attempt < retries) {
+        const retryDelay = payload.retryAfterSeconds
+          ? payload.retryAfterSeconds * 1000
+          : Math.round(baseDelayMs * Math.pow(2, attempt))
+        await sleep(retryDelay)
+        continue
+      }
+
+      throw new ApiError(payload.message, res.status, payload.code, payload.retryAfterSeconds)
+    } catch (err: any) {
+      if (attempt >= retries) throw err
+      // Network errors are retried with exponential backoff.
+      if (err instanceof ApiError) throw err
+      await sleep(Math.round(baseDelayMs * Math.pow(2, attempt)))
+    }
+  }
+
+  throw new ApiError('Request failed after retries', 0)
+}
+
 
 async function pollJob(jobId: string) {
   let attempts = 0
@@ -188,16 +257,14 @@ export async function analyzeSkills(token: string | null, payload: { resume: Fil
 }
 
 export async function generateEmail(token: string | null, payload: { type: string, candidateName: string, jobTitle: string }) {
-  const res = await fetch(`${API_BASE}/generate-email`, {
+  return fetchJsonWithRetry(`${API_BASE}/generate-email`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: JSON.stringify(payload)
-  })
-  if (!res.ok) throw new Error(`Email generation failed: ${res.status}`)
-  return res.json()
+  }, { retries: 2, baseDelayMs: 600 })
 }
 
 export async function mockInterview(token: string | null, payload: { history: any[], message: string, jobContext: string }) {
@@ -277,16 +344,14 @@ export async function generateCareerPath(token: string | null, payload: { resume
 }
 
 export async function generateJobDescription(token: string | null, payload: { title: string, skills: string, experience: string }) {
-  const res = await fetch(`${API_BASE}/generate-job-description`, {
+  return fetchJsonWithRetry(`${API_BASE}/generate-job-description`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: JSON.stringify(payload)
-  })
-  if (!res.ok) throw new Error(`JD generation failed: ${res.status}`)
-  return res.json()
+  }, { retries: 2, baseDelayMs: 600 })
 }
 
 export async function resumeHealthCheck(token: string | null, payload: { resume: File }) {
@@ -302,16 +367,14 @@ export async function resumeHealthCheck(token: string | null, payload: { resume:
 }
 
 export async function generateBooleanSearch(token: string | null, payload: { jobDescription: string }) {
-  const res = await fetch(`${API_BASE}/generate-boolean-search`, {
+  return fetchJsonWithRetry(`${API_BASE}/generate-boolean-search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: JSON.stringify(payload)
-  })
-  if (!res.ok) throw new Error(`Boolean search generation failed: ${res.status}`)
-  return res.json()
+  }, { retries: 2, baseDelayMs: 600 })
 }
 
 export async function getHistory(token: string) {
@@ -323,15 +386,83 @@ export async function getHistory(token: string) {
 }
 
 export async function generateNetworkingMessage(token: string | null, payload: { targetRole: string, company: string, recipientName: string, messageType: string }) {
-  const res = await fetch(`${API_BASE}/generate-networking-message`, {
+  return fetchJsonWithRetry(`${API_BASE}/generate-networking-message`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: JSON.stringify(payload)
+  }, { retries: 2, baseDelayMs: 600 })
+}
+
+export type RecruiterTemplateSummary = {
+  id: string
+  kind: 'email' | 'job_description'
+  title: string
+  createdAt: string
+  updatedAt: string
+  latestVersion: number
+  preview: string
+}
+
+export type RecruiterTemplateVersion = {
+  version: number
+  createdAt: string
+  content: any
+  metadata?: Record<string, any>
+}
+
+export type RecruiterTemplate = {
+  id: string
+  kind: 'email' | 'job_description'
+  title: string
+  createdAt: string
+  updatedAt: string
+  versions: RecruiterTemplateVersion[]
+}
+
+export async function listRecruiterTemplates(token: string | null, kind?: 'email' | 'job_description') {
+  const url = new URL(`${API_BASE}/recruiter/templates`)
+  if (kind) url.searchParams.set('kind', kind)
+  const res = await fetch(url.toString(), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
   })
-  if (!res.ok) throw new Error(`Networking message generation failed: ${res.status}`)
-  return res.json()
+  if (!res.ok) {
+    const payload = await readErrorPayload(res)
+    throw new ApiError(payload.message, res.status, payload.code, payload.retryAfterSeconds)
+  }
+  return res.json() as Promise<{ templates: RecruiterTemplateSummary[] }>
+}
+
+export async function getRecruiterTemplate(token: string | null, templateId: string) {
+  const res = await fetch(`${API_BASE}/recruiter/templates/${templateId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  })
+  if (!res.ok) {
+    const payload = await readErrorPayload(res)
+    throw new ApiError(payload.message, res.status, payload.code, payload.retryAfterSeconds)
+  }
+  return res.json() as Promise<{ template: RecruiterTemplate }>
+}
+
+export async function saveRecruiterTemplate(
+  token: string | null,
+  payload: {
+    kind: 'email' | 'job_description'
+    title: string
+    content: any
+    metadata?: Record<string, any>
+    templateId?: string
+  }
+) {
+  return fetchJsonWithRetry(`${API_BASE}/recruiter/templates`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  }, { retries: 1, baseDelayMs: 500 }) as Promise<{ template: RecruiterTemplate }>
 }
 

@@ -169,11 +169,14 @@ DATA_DIR = config.DATA_DIR
 COACHING_DIR = os.path.join(DATA_DIR, "coaching")
 VERSIONS_FILE = os.path.join(COACHING_DIR, "resume_versions.json")
 WELCOME_EMAILS_FILE = os.path.join(COACHING_DIR, "welcome_emails.json")
+RECRUITER_DIR = os.path.join(DATA_DIR, "recruiter")
+RECRUITER_TEMPLATES_FILE = os.path.join(RECRUITER_DIR, "templates.json")
 AUDIT_DIR = os.path.join(DATA_DIR, "audit")
 EVENTS_LOG = os.path.join(AUDIT_DIR, "events.jsonl")
 AUDIT_LOG = os.path.join(AUDIT_DIR, "audit.jsonl")
 ROLES_FILE = os.path.join(DATA_DIR, "roles.json")
 os.makedirs(COACHING_DIR, exist_ok=True)
+os.makedirs(RECRUITER_DIR, exist_ok=True)
 os.makedirs(AUDIT_DIR, exist_ok=True)
 
 # Initialize roles file if absent
@@ -186,6 +189,7 @@ _welcome_lock = threading.Lock()
 _audit_lock = threading.Lock()
 _event_lock = threading.Lock()
 _rate_lock = threading.Lock()
+_template_lock = threading.Lock()
 _rate_buckets = defaultdict(list)  # key -> list[timestamps]
 
 def rate_limit(max_requests=30, per_seconds=60, key_fn=None):
@@ -326,6 +330,80 @@ def mark_welcome_email_sent(user_id, email):
             "firstSentAt": datetime.utcnow().isoformat() + "Z"
         }
         _write_welcome_store(store)
+
+def _read_recruiter_templates_store():
+    if not os.path.exists(RECRUITER_TEMPLATES_FILE):
+        return {}
+    try:
+        with open(RECRUITER_TEMPLATES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _write_recruiter_templates_store(store):
+    tmp_path = RECRUITER_TEMPLATES_FILE + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(store, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, RECRUITER_TEMPLATES_FILE)
+
+def _list_recruiter_templates(user_id, kind=None):
+    store = _read_recruiter_templates_store()
+    templates = store.get(user_id, [])
+    if kind:
+        templates = [t for t in templates if t.get("kind") == kind]
+    return templates
+
+def _get_recruiter_template(user_id, template_id):
+    templates = _list_recruiter_templates(user_id)
+    for item in templates:
+        if item.get("id") == template_id:
+            return item
+    return None
+
+def _save_recruiter_template(user_id, kind, title, content, metadata=None, template_id=None):
+    now = datetime.utcnow().isoformat() + "Z"
+    metadata = metadata or {}
+    with _template_lock:
+        store = _read_recruiter_templates_store()
+        templates = store.get(user_id, [])
+
+        target = None
+        if template_id:
+            for item in templates:
+                if item.get("id") == template_id:
+                    target = item
+                    break
+
+        if target:
+            version_num = len(target.get("versions", [])) + 1
+            target["title"] = title or target.get("title") or f"{kind.title()} Template"
+            target["updatedAt"] = now
+            target.setdefault("versions", []).append({
+                "version": version_num,
+                "createdAt": now,
+                "content": content,
+                "metadata": metadata,
+            })
+        else:
+            template_id = str(uuid.uuid4())
+            target = {
+                "id": template_id,
+                "kind": kind,
+                "title": title or f"{kind.title()} Template",
+                "createdAt": now,
+                "updatedAt": now,
+                "versions": [{
+                    "version": 1,
+                    "createdAt": now,
+                    "content": content,
+                    "metadata": metadata,
+                }],
+            }
+            templates.append(target)
+
+        store[user_id] = templates
+        _write_recruiter_templates_store(store)
+        return target
 
 # =============================
 # RBAC & Audit Logging
@@ -1876,6 +1954,77 @@ def generate_job_description(user_info):
         result = {"raw_response": response}
         
     return jsonify(result)
+
+@app.route('/recruiter/templates', methods=['GET'])
+@cross_origin()
+@auth_required
+def list_recruiter_templates(user_info):
+    user_id = user_info.get("uid")
+    kind = request.args.get("kind")
+    if kind and kind not in ["email", "job_description"]:
+        return jsonify({"error": "Invalid kind"}), 400
+
+    templates = _list_recruiter_templates(user_id, kind=kind)
+    summaries = []
+    for item in templates:
+        versions = item.get("versions", [])
+        latest = versions[-1] if versions else {}
+        content = latest.get("content")
+        preview = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+        summaries.append({
+            "id": item.get("id"),
+            "kind": item.get("kind"),
+            "title": item.get("title"),
+            "createdAt": item.get("createdAt"),
+            "updatedAt": item.get("updatedAt"),
+            "latestVersion": len(versions),
+            "preview": (preview or "")[:220],
+        })
+
+    write_audit(user_id, 'recruiter.templates.list', {'count': len(summaries), 'kind': kind or 'all'})
+    return jsonify({"templates": summaries})
+
+@app.route('/recruiter/templates/<template_id>', methods=['GET'])
+@cross_origin()
+@auth_required
+def get_recruiter_template(user_info, template_id):
+    user_id = user_info.get("uid")
+    template = _get_recruiter_template(user_id, template_id)
+    if not template:
+        return jsonify({"error": "Template not found"}), 404
+    write_audit(user_id, 'recruiter.templates.get', {'templateId': template_id})
+    return jsonify({"template": template})
+
+@app.route('/recruiter/templates', methods=['POST'])
+@cross_origin()
+@auth_required
+@rate_limit(max_requests=20, per_seconds=60)
+def save_recruiter_template(user_info):
+    user_id = user_info.get("uid")
+    data = request.get_json(silent=True) or {}
+    kind = (data.get("kind") or "").strip()
+    title = (data.get("title") or "").strip()
+    content = data.get("content")
+    metadata = data.get("metadata") or {}
+    template_id = data.get("templateId")
+
+    if kind not in ["email", "job_description"]:
+        return jsonify({"error": "kind must be email or job_description"}), 400
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return jsonify({"error": "content is required"}), 400
+    if metadata and not isinstance(metadata, dict):
+        return jsonify({"error": "metadata must be an object"}), 400
+
+    saved = _save_recruiter_template(
+        user_id=user_id,
+        kind=kind,
+        title=title,
+        content=content,
+        metadata=metadata,
+        template_id=template_id,
+    )
+    write_audit(user_id, 'recruiter.templates.save', {'templateId': saved.get('id'), 'kind': kind, 'version': len(saved.get('versions', []))})
+    return jsonify({"template": saved})
 
 @app.route('/resume-health-check', methods=['POST'])
 @cross_origin()
