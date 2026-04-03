@@ -24,6 +24,31 @@ type GeneratedJDObject = {
   benefits?: string[]
 }
 
+type ShortlistEvidence = {
+  type: string
+  title: string
+  detail: string
+  confidence?: string
+}
+
+type ShortlistRiskFlag = {
+  severity: 'high' | 'medium' | 'low'
+  title: string
+  detail: string
+}
+
+type ShortlistDashboard = {
+  decision: 'shortlisted' | 'review' | 'hold'
+  decisionReason: string
+  confidenceScore: number
+  skillCoveragePercentage?: number | null
+  matchedSkills?: string[]
+  missingSkills?: string[]
+  evidence?: ShortlistEvidence[]
+  riskFlags?: ShortlistRiskFlag[]
+  interviewFocusAreas?: string[]
+}
+
 function isGeneratedJDObject(value: string | GeneratedJDObject): value is GeneratedJDObject {
   return typeof value !== 'string'
 }
@@ -68,6 +93,8 @@ export default function Recruiter() {
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
 
   const actionsBlocked = loading || rateLimitRemaining > 0
+
+  const shortlist = (result?.shortlistDashboard || null) as ShortlistDashboard | null
 
   const generatedJdForSave = useMemo(() => {
     if (!generatedJD) return ''
@@ -487,6 +514,61 @@ export default function Recruiter() {
       {result && (
         <div className='card'>
           <h3>Analysis Result</h3>
+          {shortlist && (
+            <div className='recruiter-shortlist-dashboard'>
+              <div className='recruiter-shortlist-header'>
+                <div>
+                  <h4>Shortlist Decision: <span className={`recruiter-decision-pill ${shortlist.decision}`}>{shortlist.decision.toUpperCase()}</span></h4>
+                  <p className='recruiter-muted-text'>{shortlist.decisionReason}</p>
+                </div>
+                <div className='recruiter-score-box'>
+                  <strong>{shortlist.confidenceScore}%</strong>
+                  <span>Confidence</span>
+                </div>
+              </div>
+
+              <div className='recruiter-shortlist-grid'>
+                <div className='recruiter-shortlist-panel'>
+                  <h5>Why Shortlisted</h5>
+                  {(shortlist.evidence || []).length === 0 ? (
+                    <p className='recruiter-muted-text'>No shortlist evidence available.</p>
+                  ) : (
+                    <ul className='recruiter-list'>
+                      {(shortlist.evidence || []).map((item, idx) => (
+                        <li key={`${item.type}-${idx}`} className='recruiter-list-item'>
+                          <strong>{item.title}:</strong> {item.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className='recruiter-shortlist-panel'>
+                  <h5>Risk Flags</h5>
+                  {(shortlist.riskFlags || []).length === 0 ? (
+                    <p className='recruiter-muted-text'>No active risk flags detected.</p>
+                  ) : (
+                    <ul className='recruiter-list'>
+                      {(shortlist.riskFlags || []).map((risk, idx) => (
+                        <li key={`${risk.title}-${idx}`} className='recruiter-list-item'>
+                          <span className={`recruiter-risk-chip ${risk.severity}`}>{risk.severity.toUpperCase()}</span>
+                          <strong>{risk.title}:</strong> {risk.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              <div className='chip-row'>
+                {typeof shortlist.skillCoveragePercentage === 'number' && (
+                  <span className='chip'>Skill coverage: {shortlist.skillCoveragePercentage}%</span>
+                )}
+                <span className='chip'>Matched: {(shortlist.matchedSkills || []).length}</span>
+                <span className='chip'>Missing: {(shortlist.missingSkills || []).length}</span>
+              </div>
+            </div>
+          )}
           {result.formattedReport ? (
             <pre className='report'>{result.formattedReport}</pre>
           ) : (

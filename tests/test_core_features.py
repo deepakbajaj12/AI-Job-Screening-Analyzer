@@ -287,6 +287,33 @@ class TestAnalyzeEndpoint:
         else:
             assert "job_id" in data
 
+    @patch("backend.app.call_llm")
+    def test_recruiter_shortlist_dashboard_schema(self, mock_llm):
+        """Recruiter analysis should include structured shortlist evidence and risks."""
+        from backend.app import run_analysis_task
+
+        mock_llm.return_value = json.dumps({
+            "strengths": ["Strong backend delivery", "Good collaboration"],
+            "improvementAreas": ["System design depth", "Stakeholder communication"],
+            "recommendedRoles": ["Senior Python Developer"],
+            "generalFeedback": "Strong candidate with relevant platform experience."
+        })
+
+        result = run_analysis_task(
+            "recruiter",
+            "Python engineer delivered 30% latency reduction with Flask and Docker.",
+            "Need Python Flask Docker AWS leadership communication",
+            "recruiter@test.com",
+            {"uid": "test-user"}
+        )
+
+        assert "shortlistDashboard" in result
+        dashboard = result["shortlistDashboard"]
+        assert dashboard["decision"] in {"shortlisted", "review", "hold"}
+        assert isinstance(dashboard.get("evidence", []), list)
+        assert isinstance(dashboard.get("riskFlags", []), list)
+        assert "confidenceScore" in dashboard
+
 
 # =============================
 # 6. Cover Letter Generation Tests

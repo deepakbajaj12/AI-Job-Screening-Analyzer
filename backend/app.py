@@ -848,6 +848,129 @@ def compute_semantic_match(resume_text, job_text):
         logger.error(f"semantic.match_error error={e}")
         return None
 
+def _extract_quantified_impact_lines(text):
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    quantified = []
+    pattern = re.compile(r"\b\d+(?:\.\d+)?\s*(?:%|percent|x|k|m|million|billion|\+)\b", re.IGNORECASE)
+    for line in lines:
+        if pattern.search(line):
+            quantified.append(line)
+    return quantified
+
+def build_recruiter_shortlist_dashboard(
+    resume_text,
+    job_desc_text,
+    lexical_score,
+    semantic_score,
+    combined_score,
+    strengths,
+    improvement_areas,
+):
+    required_skills = detect_skills(job_desc_text)
+    resume_skills = detect_skills(resume_text)
+    matched_skills = sorted(list(set(required_skills).intersection(set(resume_skills))))
+    missing_skills = sorted(list(set(required_skills) - set(resume_skills)))
+    quantified_lines = _extract_quantified_impact_lines(resume_text)
+    resume_word_count = len(re.findall(r"\w+", resume_text or ""))
+
+    skill_coverage = None
+    if required_skills:
+        skill_coverage = round((len(matched_skills) / len(required_skills)) * 100, 2)
+
+    evidence = []
+    if combined_score is not None:
+        evidence.append({
+            "type": "match_score",
+            "title": "Strong overall match",
+            "detail": f"Combined match is {combined_score}% (lexical {lexical_score}%, semantic {semantic_score if semantic_score is not None else 'N/A'}%).",
+            "confidence": "high" if combined_score >= 70 else "medium",
+        })
+
+    if matched_skills:
+        evidence.append({
+            "type": "skill_alignment",
+            "title": "Key skills aligned",
+            "detail": f"Matched {len(matched_skills)} required skills: {', '.join(matched_skills[:8])}.",
+            "confidence": "high" if len(matched_skills) >= 4 else "medium",
+        })
+
+    if strengths:
+        evidence.append({
+            "type": "strengths",
+            "title": "Profile strengths",
+            "detail": "; ".join(strengths[:2]),
+            "confidence": "medium",
+        })
+
+    if quantified_lines:
+        evidence.append({
+            "type": "impact",
+            "title": "Quantified outcomes present",
+            "detail": f"Resume includes {len(quantified_lines)} quantified achievement lines.",
+            "confidence": "medium",
+        })
+
+    risk_flags = []
+    if combined_score is not None and combined_score < 58:
+        risk_flags.append({
+            "severity": "high",
+            "title": "Low match score",
+            "detail": f"Combined match is {combined_score}%, below common shortlist range.",
+        })
+
+    if len(missing_skills) >= 4:
+        risk_flags.append({
+            "severity": "high",
+            "title": "Critical skill gaps",
+            "detail": f"Missing {len(missing_skills)} required skills, including {', '.join(missing_skills[:5])}.",
+        })
+    elif missing_skills:
+        risk_flags.append({
+            "severity": "medium",
+            "title": "Skill gaps to validate",
+            "detail": f"Missing skills to verify during screening: {', '.join(missing_skills[:5])}.",
+        })
+
+    if resume_word_count < 160:
+        risk_flags.append({
+            "severity": "medium",
+            "title": "Thin resume detail",
+            "detail": "Resume appears short; depth of experience may be under-documented.",
+        })
+
+    if not quantified_lines:
+        risk_flags.append({
+            "severity": "low",
+            "title": "Limited measurable outcomes",
+            "detail": "Few quantified achievements detected, which can weaken evidence of impact.",
+        })
+
+    high_risk_count = len([item for item in risk_flags if item["severity"] == "high"])
+    baseline = combined_score if combined_score is not None else lexical_score
+    confidence_score = max(5, min(99, round((baseline or 0) - (high_risk_count * 5), 2)))
+
+    if (combined_score or 0) >= 72 and high_risk_count == 0 and len(missing_skills) <= 2:
+        decision = "shortlisted"
+        decision_reason = "High score with manageable risks and strong skill alignment."
+    elif (combined_score or 0) >= 58:
+        decision = "review"
+        decision_reason = "Potential fit, but additional screening is recommended."
+    else:
+        decision = "hold"
+        decision_reason = "Current evidence suggests lower fit for immediate shortlist."
+
+    return {
+        "decision": decision,
+        "decisionReason": decision_reason,
+        "confidenceScore": confidence_score,
+        "skillCoveragePercentage": skill_coverage,
+        "matchedSkills": matched_skills,
+        "missingSkills": missing_skills,
+        "evidence": evidence,
+        "riskFlags": risk_flags,
+        "interviewFocusAreas": improvement_areas[:4] if improvement_areas else [],
+    }
+
 def _generate_interview_questions_for_role(resume_excerpt, target_role, top_skills):
     prompt = f'''
 You are an expert technical interviewer.
@@ -1155,7 +1278,17 @@ Job Description:
         final_result['lexicalMatchPercentage'] = match_percentage
         if semantic_score is not None:
             final_result['semanticMatchPercentage'] = semantic_score
-            final_result['combinedMatchPercentage'] = combined
+        final_result['combinedMatchPercentage'] = combined
+
+        final_result['shortlistDashboard'] = build_recruiter_shortlist_dashboard(
+            resume_text=resume_text,
+            job_desc_text=job_desc_text,
+            lexical_score=match_percentage,
+            semantic_score=semantic_score,
+            combined_score=combined,
+            strengths=final_result.get("strengths", []),
+            improvement_areas=final_result.get("improvementAreas", []),
+        )
             
         final_result["formattedReport"] = format_report(final_result)
         return final_result
