@@ -91,6 +91,8 @@ export default function Recruiter() {
   const [emailTemplateId, setEmailTemplateId] = useState<string | undefined>(undefined)
   const [jdTemplateId, setJdTemplateId] = useState<string | undefined>(undefined)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
+  const [templatesLoaded, setTemplatesLoaded] = useState(false)
+  const [templatesApiUnavailable, setTemplatesApiUnavailable] = useState(false)
 
   const actionsBlocked = loading || rateLimitRemaining > 0
 
@@ -104,10 +106,17 @@ export default function Recruiter() {
   useEffect(() => {
     if (!token) {
       setTemplates([])
+      setSelectedTemplate(null)
+      setTemplatesLoaded(false)
+      setTemplatesApiUnavailable(false)
       return
     }
+  }, [token])
+
+  useEffect(() => {
+    if (!token || !templatesLoaded || templatesApiUnavailable) return
     void refreshTemplates()
-  }, [token, templateFilter])
+  }, [token, templateFilter, templatesLoaded, templatesApiUnavailable])
 
   useEffect(() => {
     if (!rateLimitUntil) return
@@ -128,11 +137,21 @@ export default function Recruiter() {
   }, [copyMessage])
 
   const refreshTemplates = async () => {
+    if (!token || templatesApiUnavailable) return
     try {
       const kind = templateFilter === 'all' ? undefined : templateFilter
       const data = await listRecruiterTemplates(token, kind)
       setTemplates(data.templates || [])
-    } catch {
+      setTemplatesLoaded(true)
+    } catch (err: any) {
+      if (err instanceof ApiError && err.status === 404) {
+        setTemplatesApiUnavailable(true)
+        setTemplates([])
+        setSelectedTemplate(null)
+        setTemplatesLoaded(false)
+        setCopyMessage('Templates are unavailable on this backend deployment')
+        return
+      }
       // Template list is non-blocking for recruiter workflows.
     }
   }
@@ -261,6 +280,7 @@ export default function Recruiter() {
   }
 
   const openTemplate = async (templateId: string) => {
+    if (templatesApiUnavailable) return
     setLoading(true)
     setError(null)
     try {
@@ -463,19 +483,23 @@ export default function Recruiter() {
 
       <div className='card'>
         <h3>Reusable Templates</h3>
-        <div className='recruiter-toolbar'>
-          <label htmlFor='template-filter' className='recruiter-label-inline'>Filter</label>
-          <select id='template-filter' aria-label='Template Filter' value={templateFilter} onChange={e => setTemplateFilter(e.target.value as 'all' | 'email' | 'job_description')}>
-            <option value='all'>All</option>
-            <option value='email'>Email</option>
-            <option value='job_description'>Job Description</option>
-          </select>
-          <button className='btn secondary' onClick={refreshTemplates} disabled={actionsBlocked}>Refresh</button>
-        </div>
-
-        {templates.length === 0 ? (
-          <p className='recruiter-muted-text'>No templates saved yet.</p>
+        {templatesApiUnavailable ? (
+          <p className='recruiter-muted-text'>Templates are not available on your current backend deployment.</p>
         ) : (
+          <div className='recruiter-toolbar'>
+            <label htmlFor='template-filter' className='recruiter-label-inline'>Filter</label>
+            <select id='template-filter' aria-label='Template Filter' value={templateFilter} onChange={e => setTemplateFilter(e.target.value as 'all' | 'email' | 'job_description')}>
+              <option value='all'>All</option>
+              <option value='email'>Email</option>
+              <option value='job_description'>Job Description</option>
+            </select>
+            <button className='btn secondary' onClick={refreshTemplates} disabled={actionsBlocked}>{templatesLoaded ? 'Refresh' : 'Load Templates'}</button>
+          </div>
+        )}
+
+        {!templatesApiUnavailable && templatesLoaded && templates.length === 0 ? (
+          <p className='recruiter-muted-text'>No templates saved yet.</p>
+        ) : !templatesApiUnavailable && templates.length > 0 ? (
           <div className='grid'>
             {templates.map((item) => (
               <div key={item.id} className='card recruiter-card-flat'>
@@ -487,9 +511,9 @@ export default function Recruiter() {
               </div>
             ))}
           </div>
-        )}
+        ) : null}
 
-        {selectedTemplate && (
+        {!templatesApiUnavailable && selectedTemplate && (
           <div className='recruiter-selected-template'>
             <h4>{selectedTemplate.title} - Version History</h4>
             <div className='grid'>
