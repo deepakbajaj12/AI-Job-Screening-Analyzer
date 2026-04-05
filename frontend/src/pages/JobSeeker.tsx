@@ -1,3 +1,4 @@
+// JOB SEEKER PAGE: Multiple AI tools - resume matching, cover letter generation, interview prep, salary estimation, career path, LinkedIn profile generation
 import { useState } from 'react'
 import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage, downloadAnalysisPdf, downloadCoverLetterPdf } from '../api/client'
 import { useAuth } from '../context/AuthContext'

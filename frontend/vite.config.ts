@@ -1,3 +1,4 @@
+// VITE BUILD CONFIG: Frontend bundler configuration with React plugin, environment variables, and production optimization
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react-swc'
 

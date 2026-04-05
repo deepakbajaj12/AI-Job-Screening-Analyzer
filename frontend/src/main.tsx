@@ -1,3 +1,4 @@
+// ENTRY POINT: React 18 application initialization with FirebaseAuthProvider and Router setup
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

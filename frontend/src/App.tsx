@@ -1,3 +1,4 @@
+// MAIN ROUTER: Navigation between Job Seeker, Recruiter, Coaching, History, and Landing pages with Firebase authentication
 import { Routes, Route } from 'react-router-dom'
 import React from 'react'
 import Home from './pages/Home'

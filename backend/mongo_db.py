@@ -1,3 +1,4 @@
+// DATABASE LAYER: MongoDB integration for persisting user analysis history and coaching version data with graceful fallback
 import certifi
 import logging
 import os

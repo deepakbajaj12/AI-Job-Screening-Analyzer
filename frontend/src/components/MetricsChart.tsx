@@ -1,3 +1,4 @@
+// PROGRESS VISUALIZATION: Renders coaching progress metrics over versions using Chart.js with trend lines
 import { Line } from 'react-chartjs-2'
 import { useState } from 'react'
 import { Chart as ChartJS, LineElement, PointElement, LinearScale, Title, Tooltip, Legend, CategoryScale } from 'chart.js'

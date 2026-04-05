@@ -1,3 +1,4 @@
+# CONTAINERIZATION: Docker image for backend with Python 3.12, Flask server, and dependency installation
 FROM python:3.12-slim
 
 WORKDIR /app

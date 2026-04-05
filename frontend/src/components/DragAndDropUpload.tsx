@@ -1,3 +1,4 @@
+// DRAG-DROP UPLOAD: Reusable component for PDF file uploads with drag-and-drop UI and file validation
 import React, { useCallback, useState } from 'react'
 
 interface DragAndDropUploadProps {

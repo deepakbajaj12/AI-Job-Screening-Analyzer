@@ -1,3 +1,4 @@
+# PDF REPORT GENERATION: Creates professional formatted PDFs for all reports (Job Seeker analysis, Recruiter decisions, Cover letters, Coaching progress) using ReportLab
 """
 PDF Report Generator for Resume Analysis Results
 Generates formatted PDF reports for different analysis modes and tools.

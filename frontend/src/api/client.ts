@@ -1,3 +1,4 @@
+// API CLIENT: Centralized HTTP client with retry logic, error handling, and all analysis, coaching, and recruiter endpoints
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://ai-job-screening-analyzer.onrender.com')
 
 export class ApiError extends Error {

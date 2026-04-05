@@ -1,3 +1,4 @@
+# ASYNC TASK WORKER: Processes resume analysis jobs in background queue with user association for history tracking
 import sys
 import os
 from datetime import datetime

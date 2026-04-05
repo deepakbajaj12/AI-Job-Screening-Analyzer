@@ -1,3 +1,4 @@
+# MAIN APPLICATION: Flask server with 30+ endpoints for AI-powered resume analysis, recruiter tools, and coaching for both job seekers and recruiters
 import os
 import sys
 # Add parent directory to path to ensure backend module can be imported

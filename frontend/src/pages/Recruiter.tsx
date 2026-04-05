@@ -1,3 +1,4 @@
+// RECRUITER PAGE: Candidate shortlist dashboard with decision (shortlist/review/hold), evidence reasoning, risk flags, email assistant, JD generator, Boolean search
 import { useEffect, useMemo, useState } from 'react'
 import {
   analyzeRecruiter,

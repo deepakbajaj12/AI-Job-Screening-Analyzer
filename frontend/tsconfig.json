@@ -1,3 +1,4 @@
+// TYPESCRIPT CONFIG: Type checking configuration for React 18 with JSX support and strict null checks
 {
   "compilerOptions": {
     "target": "ES2020",

@@ -1,3 +1,4 @@
+# ORCHESTRATION: Docker Compose setup for backend (Flask), MongoDB, and Redis services in development
 version: '3.9'
 services:
   backend:

@@ -1,3 +1,4 @@
+// COACHING DASHBOARD: Version tracking with progress metrics, skill gap analysis, study pack resources with filtering, interview questions, version comparison
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { coachingProgress, coachingStudyPack, coachingInterviewQuestions, coachingDiff, coachingSaveVersion, downloadCoachingReportPdf } from '../api/client'

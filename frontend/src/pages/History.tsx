@@ -1,3 +1,4 @@
+// HISTORY PAGE: Displays all past analyses (Job Seeker/Recruiter mode) with match scores, strengths, and improvement areas sorted by date
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getHistory } from '../api/client'

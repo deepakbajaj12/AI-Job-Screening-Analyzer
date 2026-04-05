@@ -1,3 +1,4 @@
+// AUTHENTICATION CONTEXT: Firebase authentication state management (login/logout/user info) accessible across all components
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { initializeApp } from 'firebase/app'
 import {
