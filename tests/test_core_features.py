@@ -534,3 +534,46 @@ class TestMongoIntegration:
         from backend.mongo_db import get_user_history
         result = get_user_history("test-user")
         assert result == []
+
+
+# =============================
+# 13. Worker Tasks Tests
+# =============================
+class TestWorkerTasks:
+    def test_process_resume_analysis_accepts_user_id(self):
+        """Verify process_resume_analysis accepts user_id parameter."""
+        from backend.worker_tasks import process_resume_analysis
+        import inspect
+        
+        # Check function signature includes user_id parameter
+        sig = inspect.signature(process_resume_analysis)
+        params = list(sig.parameters.keys())
+        assert "user_id" in params, "process_resume_analysis missing user_id parameter"
+        
+        # Check user_id has default value
+        assert sig.parameters["user_id"].default == "anonymous", "user_id should default to 'anonymous'"
+
+    @patch('backend.app.run_analysis_task')
+    def test_process_resume_analysis_calls_save_with_user_id(self, mock_run):
+        """Verify process_resume_analysis calls save_analysis with user_id."""
+        from backend.worker_tasks import process_resume_analysis
+        from unittest.mock import patch as mock_patch
+        
+        mock_run.return_value = {"combinedMatchPercentage": 75}
+        
+        # Patch save_analysis where it's imported (inside mongo_db)
+        with mock_patch('backend.mongo_db.save_analysis') as mock_save:
+            # Call with explicit user_id
+            result = process_resume_analysis(
+                "sample resume text",
+                "sample jd",
+                "jobSeeker",
+                "user-123"
+            )
+            
+            # Verify save_analysis was called with user_id
+            mock_save.assert_called_once()
+            call_kwargs = mock_save.call_args[1]
+            assert call_kwargs.get("user_id") == "user-123", "user_id not passed to save_analysis"
+            assert call_kwargs.get("mode") == "jobSeeker"
+            assert "result" in call_kwargs

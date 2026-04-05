@@ -1392,7 +1392,8 @@ def analyze(user_info):
             process_resume_analysis,
             resume_text,
             job_desc_text,
-            mode
+            mode,
+            user_info.get("uid", "anonymous")
         )
 
         return jsonify({

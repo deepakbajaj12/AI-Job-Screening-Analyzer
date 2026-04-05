@@ -18,10 +18,10 @@ except ImportError:
     except ImportError:
         from .mongo_db import get_db
 
-def process_resume_analysis(resume_text, jd_text, mode):
+def process_resume_analysis(resume_text, jd_text, mode, user_id="anonymous"):
     """
     Background Task:
-    Runs AI analysis + Saves to MongoDB
+    Runs AI analysis + Saves to MongoDB with user association
     """
     
     # We must delay this import to avoid circular dependencies and import errors
@@ -30,9 +30,15 @@ def process_resume_analysis(resume_text, jd_text, mode):
     # Moving import inside the function breaks the cycle at module level
     try:
         from backend.app import run_analysis_task
+        from backend.mongo_db import save_analysis
     except ImportError:
         # If running from inside Backend_old
-        from app import run_analysis_task
+        try:
+            from app import run_analysis_task
+            from mongo_db import save_analysis
+        except ImportError:
+            from .app import run_analysis_task
+            from .mongo_db import save_analysis
 
     # Run AI analysis (synchronously calling the celery task function)
     # The arguments required are: mode, resume_text, job_desc_text, recruiter_email, user_info
@@ -47,20 +53,16 @@ def process_resume_analysis(resume_text, jd_text, mode):
     except Exception as e:
         result = {"error": str(e)}
 
-    # Save result permanently
-    db, available = get_db()
-    if available and db is not None:
-        try:
-            db["analysis_results"].insert_one({
-                "resume": resume_text[:500],
-                "job_description": jd_text[:500],
-                "mode": mode,
-                "result": result,
-                "createdAt": datetime.utcnow()
-            })
-        except Exception as e:
-            print(f"MongoDB save error: {e}")
-    else:
-        print("MongoDB not connected, skipping save")
+    # Save result using proper save_analysis function to include user association
+    try:
+        save_analysis(
+            user_id=user_id,
+            mode=mode,
+            result=result,
+            resume_excerpt=resume_text[:500],
+            job_desc_excerpt=jd_text[:500]
+        )
+    except Exception as e:
+        print(f"MongoDB save error: {e}")
 
     return result
