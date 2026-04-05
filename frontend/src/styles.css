@@ -367,6 +367,25 @@ pre {
   margin-top: 12px;
 }
 
+.coaching-inline-message {
+  margin-top: 10px;
+}
+
+.coaching-success-message {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--success);
+  padding: 12px;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
+.coaching-help-text {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .interview-chat-log {
   height: 400px;
   overflow-y: auto;

@@ -18,6 +18,8 @@ export default function Coaching() {
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [jdText, setJdText] = useState<string>('')
   const [diffData, setDiffData] = useState<any>(null)
+  const [saveNotice, setSaveNotice] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -79,12 +81,23 @@ export default function Coaching() {
 
   const saveVersion = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!token || !resumeFile) { setError('Select a resume file'); return }
+    setSaveNotice(null)
+    setSaveError(null)
+    if (!token) {
+      setSaveError('Sign in first to save coaching versions.')
+      return
+    }
+    if (!resumeFile) {
+      setSaveError('Select a resume PDF before saving.')
+      return
+    }
     setLoading(true); setError(null)
     try {
-      await coachingSaveVersion(token, { resume: resumeFile, jobDescription: jdText })
+      const saved = await coachingSaveVersion(token, { resume: resumeFile, jobDescription: jdText })
       setProgress(await coachingProgress(token))
       setStudy(await coachingStudyPack(token))
+      const versionNumber = saved?.saved?.version
+      setSaveNotice(versionNumber ? `Version v${versionNumber} saved successfully.` : 'Version saved successfully.')
     } catch (err: any) { setError(err?.message || 'Save version failed') }
     finally { setLoading(false) }
   }
@@ -113,7 +126,10 @@ export default function Coaching() {
           <label>Job Description (optional text)
             <textarea rows={4} value={jdText} onChange={e => setJdText(e.target.value)} />
           </label>
-          <button className="btn" disabled={loading || !token}>Save Version</button>
+          <button className="btn" disabled={loading || !token}>{loading ? 'Saving...' : 'Save Version'}</button>
+          {saveError && <div className="error coaching-inline-message">{saveError}</div>}
+          {saveNotice && <div className="coaching-success-message coaching-inline-message">{saveNotice}</div>}
+          {!token && <div className="coaching-help-text">Sign in to enable save.</div>}
         </form>
       </div>
 
@@ -143,29 +159,35 @@ export default function Coaching() {
               ))}
             </div>
             <p className="study-resources-label">Resources:</p>
-            <div className="grid">
-              {filteredStudyPack.map((item:any, i:number) => (
-                <div key={i} className="card resource">
-                  <div className="resource-head">
-                    <span className="chip">{item.skill}</span>
+            {study.studyPack?.length === 0 ? (
+              <div className="coaching-help-text">No study resources yet. Save a version with a detailed job description to generate skill gaps.</div>
+            ) : filteredStudyPack.length === 0 ? (
+              <div className="coaching-help-text">No resources match your current search.</div>
+            ) : (
+              <div className="grid">
+                {filteredStudyPack.map((item:any, i:number) => (
+                  <div key={i} className="card resource">
+                    <div className="resource-head">
+                      <span className="chip">{item.skill}</span>
+                    </div>
+                    <div className="resource-links">
+                      {(item.resources || []).map((r:string, j:number) => {
+                        let host = ''
+                        try { host = new URL(r).hostname } catch { host = r }
+                        return (
+                          <div key={j} className="link-row">
+                            <a href={r} target="_blank" rel="noreferrer" className="link">
+                              {host}
+                            </a>
+                            <button className="copy-btn" onClick={() => copyToClipboard(r)}>Copy</button>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="resource-links">
-                    {(item.resources || []).map((r:string, j:number) => {
-                      let host = ''
-                      try { host = new URL(r).hostname } catch { host = r }
-                      return (
-                        <div key={j} className="link-row">
-                          <a href={r} target="_blank" rel="noreferrer" className="link">
-                            {host}
-                          </a>
-                          <button className="copy-btn" onClick={() => copyToClipboard(r)}>Copy</button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div>Generate by saving a version with JD.</div>
