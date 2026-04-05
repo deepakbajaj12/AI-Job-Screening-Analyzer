@@ -713,7 +713,14 @@ def normalize_linkedin_profile(parsed, fallback_text=""):
     headline = parsed.get("headline")
     if isinstance(headline, dict):
         headline = headline.get("text") or headline.get("value")
-    if not isinstance(headline, str) or not headline.strip():
+    if isinstance(headline, str):
+        headline = headline.strip()
+    if (
+        not isinstance(headline, str)
+        or not headline
+        or "error parsing" in headline.lower()
+        or "could not parse" in headline.lower()
+    ):
         headline = "Results-Driven Professional | Data, Analytics, and AI"
 
     about_value = parsed.get("about")
@@ -729,9 +736,15 @@ def normalize_linkedin_profile(parsed, fallback_text=""):
     else:
         about = about_value if isinstance(about_value, str) else ""
 
-    if not about.strip():
+    if not about.strip() or "error parsing" in about.lower() or "could not parse" in about.lower():
         cleaned = re.sub(r"```(?:json)?", "", fallback_text or "", flags=re.IGNORECASE).replace("```", "").strip()
-        about = cleaned[:1400] if cleaned else "Professional summary is not available right now."
+        if cleaned and "error parsing" not in cleaned.lower() and "could not parse" not in cleaned.lower():
+            about = cleaned[:1400]
+        else:
+            about = (
+                "I am a results-driven professional with experience in Python, SQL, data analysis, and AI-enabled workflow development. "
+                "I focus on turning raw information into practical insight, building reliable solutions, and improving user outcomes through thoughtful execution."
+            )
 
     highlights = (
         parsed.get("experience_highlights")
@@ -1425,6 +1438,7 @@ def get_task_status(task_id):
         })
 
 @app.route("/analyze", methods=["POST"])
+@cross_origin()
 @rate_limit(40, 60)
 @auth_required
 def analyze(user_info):

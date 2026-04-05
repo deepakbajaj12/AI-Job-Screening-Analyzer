@@ -14,6 +14,115 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 
 
+def _is_meaningful_value(value):
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
+
+
+def _append_text_lines(story, heading_style, normal_style, title, lines):
+    cleaned_lines = [line for line in lines if _is_meaningful_value(line)]
+    if not cleaned_lines:
+        return False
+    story.append(Paragraph(title, heading_style))
+    for line in cleaned_lines:
+        if isinstance(line, str):
+            story.append(Paragraph(f"• {line}", normal_style))
+        else:
+            story.append(Paragraph(f"• {str(line)}", normal_style))
+    story.append(Spacer(1, 0.15*inch))
+    return True
+
+
+def _append_generic_sections(story, heading_style, normal_style, result_data):
+    rendered = False
+
+    if _is_meaningful_value(result_data.get('headline')):
+        rendered |= _append_text_lines(story, heading_style, normal_style, 'Headline', [result_data.get('headline')])
+
+    about_value = result_data.get('about')
+    if isinstance(about_value, dict):
+        about_value = about_value.get('summary') or about_value.get('text') or about_value.get('about')
+    if _is_meaningful_value(about_value):
+        story.append(Paragraph('About', heading_style))
+        story.append(Paragraph(str(about_value), normal_style))
+        story.append(Spacer(1, 0.15*inch))
+        rendered = True
+
+    if _is_meaningful_value(result_data.get('experience_highlights')):
+        highlights = result_data.get('experience_highlights')
+        if isinstance(highlights, str):
+            highlights = [line.strip(' -•\t') for line in highlights.splitlines() if line.strip(' -•\t')]
+        elif not isinstance(highlights, (list, tuple, set)):
+            highlights = [str(highlights)]
+        rendered |= _append_text_lines(story, heading_style, normal_style, 'Experience Highlights', highlights)
+
+    field_map = [
+        ('rewritten_summary', 'Rewritten Summary'),
+        ('estimated_salary_range', 'Estimated Salary Range'),
+        ('market_trends', 'Market Trends'),
+        ('current_level', 'Current Level'),
+        ('summary', 'Summary'),
+        ('generalFeedback', 'Summary'),
+    ]
+
+    for field_name, title in field_map:
+        value = result_data.get(field_name)
+        if _is_meaningful_value(value):
+            story.append(Paragraph(title, heading_style))
+            story.append(Paragraph(str(value), normal_style))
+            story.append(Spacer(1, 0.15*inch))
+            rendered = True
+
+    list_fields = [
+        ('negotiation_tips', 'Negotiation Tips'),
+        ('skills_needed', 'Skills Needed'),
+        ('recommendedRoles', 'Recommended Roles'),
+        ('strengths', 'Strengths'),
+        ('improvementAreas', 'Areas to Address'),
+        ('skillGaps', 'Skill Gaps'),
+    ]
+
+    for field_name, title in list_fields:
+        value = result_data.get(field_name)
+        if isinstance(value, list) and value:
+            story.append(Paragraph(title, heading_style))
+            for item in value:
+                if isinstance(item, dict):
+                    text = item.get('skill') or item.get('title') or item.get('name') or item.get('summary') or item.get('reason') or item.get('description') or str(item)
+                else:
+                    text = str(item)
+                story.append(Paragraph(f"• {text}", normal_style))
+            story.append(Spacer(1, 0.15*inch))
+            rendered = True
+
+    return rendered
+
+
+def _detect_job_seeker_report_title(result_data):
+    if isinstance(result_data.get('headline'), str) or result_data.get('experience_highlights'):
+        return 'LinkedIn Profile Report'
+    if result_data.get('estimated_salary_range'):
+        return 'Salary Estimation Report'
+    if result_data.get('career_roadmap'):
+        return 'Career Path Report'
+    if result_data.get('score') is not None or result_data.get('checks'):
+        return 'Resume Health Check Report'
+    if result_data.get('rewritten_summary') or result_data.get('tailored_bullets'):
+        return 'Resume Tailoring Report'
+    if result_data.get('questions'):
+        return 'Interview Questions Report'
+    if result_data.get('skillGaps'):
+        return 'Skill Gap Report'
+    if result_data.get('coverLetter'):
+        return 'Cover Letter Report'
+    return 'Resume Analysis Report'
+
+
 def generate_job_seeker_pdf(result_data):
     """
     Generate PDF report for Job Seeker analysis.
@@ -57,14 +166,16 @@ def generate_job_seeker_pdf(result_data):
     )
     
     story = []
+    rendered_sections = False
     
     # Title
-    story.append(Paragraph("📄 Resume Analysis Report", title_style))
+    story.append(Paragraph(f"📄 {_detect_job_seeker_report_title(result_data)}", title_style))
     story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
     story.append(Spacer(1, 0.2*inch))
     
     # Match Scores
     if result_data.get('lexicalMatchPercentage') is not None:
+        rendered_sections = True
         story.append(Paragraph("Match Scores", heading_style))
         
         scores_data = [
@@ -91,6 +202,7 @@ def generate_job_seeker_pdf(result_data):
     
     # Strengths
     if result_data.get('strengths'):
+        rendered_sections = True
         story.append(Paragraph("✅ Strengths", heading_style))
         for strength in result_data['strengths']:
             story.append(Paragraph(f"• {strength}", normal_style))
@@ -98,6 +210,7 @@ def generate_job_seeker_pdf(result_data):
     
     # Improvement Areas
     if result_data.get('improvementAreas'):
+        rendered_sections = True
         story.append(Paragraph("📈 Areas for Improvement", heading_style))
         for area in result_data['improvementAreas']:
             story.append(Paragraph(f"• {area}", normal_style))
@@ -105,6 +218,7 @@ def generate_job_seeker_pdf(result_data):
     
     # Recommended Roles
     if result_data.get('recommendedRoles'):
+        rendered_sections = True
         story.append(Paragraph("💼 Recommended Roles", heading_style))
         for role in result_data['recommendedRoles']:
             story.append(Paragraph(f"• {role}", normal_style))
@@ -112,8 +226,15 @@ def generate_job_seeker_pdf(result_data):
     
     # General Feedback
     if result_data.get('generalFeedback'):
+        rendered_sections = True
         story.append(Paragraph("📝 General Feedback", heading_style))
         story.append(Paragraph(result_data['generalFeedback'], normal_style))
+        story.append(Spacer(1, 0.15*inch))
+
+    rendered_sections |= _append_generic_sections(story, heading_style, normal_style, result_data)
+
+    if not rendered_sections:
+        story.append(Paragraph("No structured analysis data was available.", normal_style))
         story.append(Spacer(1, 0.15*inch))
     
     # Skill Gaps
@@ -177,6 +298,7 @@ def generate_recruiter_pdf(result_data, candidate_name="Candidate"):
     )
     
     story = []
+    rendered_sections = False
     
     # Title
     story.append(Paragraph(f"👔 Recruiter Analysis Report", title_style))
@@ -185,6 +307,7 @@ def generate_recruiter_pdf(result_data, candidate_name="Candidate"):
     
     # Shortlist Dashboard
     if result_data.get('shortlistDashboard'):
+        rendered_sections = True
         dashboard = result_data['shortlistDashboard']
         story.append(Paragraph("Decision Summary", heading_style))
         
@@ -243,6 +366,7 @@ def generate_recruiter_pdf(result_data, candidate_name="Candidate"):
     
     # Match Scores
     if result_data.get('lexicalMatchPercentage') is not None:
+        rendered_sections = True
         story.append(PageBreak())
         story.append(Paragraph("Match Analysis", heading_style))
         
@@ -270,6 +394,7 @@ def generate_recruiter_pdf(result_data, candidate_name="Candidate"):
     
     # Strengths
     if result_data.get('strengths'):
+        rendered_sections = True
         story.append(Paragraph("✅ Key Strengths", heading_style))
         for strength in result_data['strengths']:
             story.append(Paragraph(f"• {strength}", normal_style))
@@ -277,6 +402,7 @@ def generate_recruiter_pdf(result_data, candidate_name="Candidate"):
     
     # Improvement Areas
     if result_data.get('improvementAreas'):
+        rendered_sections = True
         story.append(Paragraph("📈 Areas to Address", heading_style))
         for area in result_data['improvementAreas']:
             story.append(Paragraph(f"• {area}", normal_style))
@@ -284,8 +410,15 @@ def generate_recruiter_pdf(result_data, candidate_name="Candidate"):
     
     # General Feedback
     if result_data.get('generalFeedback'):
+        rendered_sections = True
         story.append(Paragraph("📝 Summary", heading_style))
         story.append(Paragraph(result_data['generalFeedback'], normal_style))
+        story.append(Spacer(1, 0.15*inch))
+
+    rendered_sections |= _append_generic_sections(story, heading_style, normal_style, result_data)
+
+    if not rendered_sections:
+        story.append(Paragraph("No structured recruiter analysis data was available.", normal_style))
         story.append(Spacer(1, 0.15*inch))
     
     # Build PDF
