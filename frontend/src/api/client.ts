@@ -466,3 +466,108 @@ export async function saveRecruiterTemplate(
   }, { retries: 1, baseDelayMs: 500 }) as Promise<{ template: RecruiterTemplate }>
 }
 
+// =============================
+// PDF Download Functions
+// =============================
+
+export async function downloadAnalysisPdf(
+  token: string | null,
+  result: any,
+  mode: 'jobSeeker' | 'recruiter' = 'jobSeeker',
+  candidateName: string = 'Candidate'
+) {
+  const res = await fetch(`${API_BASE}/download/analysis-pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({
+      result,
+      mode,
+      candidateName
+    })
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: `Download failed: ${res.status}` }))
+    throw new ApiError(error.error || 'Download failed', res.status)
+  }
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `report-${new Date().toISOString().slice(0, 10)}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function downloadCoverLetterPdf(
+  token: string | null,
+  coverLetter: string,
+  candidateName: string = ''
+) {
+  const res = await fetch(`${API_BASE}/download/cover-letter-pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({
+      coverLetter,
+      candidateName
+    })
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: `Download failed: ${res.status}` }))
+    throw new ApiError(error.error || 'Download failed', res.status)
+  }
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `cover-letter-${new Date().toISOString().slice(0, 10)}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function downloadCoachingReportPdf(
+  token: string | null,
+  data: any,
+  reportType: 'progress' | 'study_pack' | 'interview' = 'progress'
+) {
+  const res = await fetch(`${API_BASE}/download/coaching-pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({
+      data,
+      type: reportType
+    })
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: `Download failed: ${res.status}` }))
+    throw new ApiError(error.error || 'Download failed', res.status)
+  }
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `coaching-${reportType}-${new Date().toISOString().slice(0, 10)}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+

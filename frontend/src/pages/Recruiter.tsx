@@ -8,6 +8,7 @@ import {
   getRecruiterTemplate,
   listRecruiterTemplates,
   saveRecruiterTemplate,
+  downloadAnalysisPdf,
   type RecruiterTemplate,
   type RecruiterTemplateSummary,
 } from '../api/client'
@@ -61,6 +62,7 @@ export default function Recruiter() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   
   // Email Assistant State
   const [candidateName, setCandidateName] = useState('')
@@ -189,6 +191,18 @@ export default function Recruiter() {
       handleApiError(err, 'Analyze failed')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDownloadAnalysisPdf = async () => {
+    if (!result) return
+    setDownloadingPdf(true)
+    try {
+      await downloadAnalysisPdf(token, result, 'recruiter', candidateName || 'Candidate')
+    } catch (err: any) {
+      setError(err?.message || 'Failed to download PDF')
+    } finally {
+      setDownloadingPdf(false)
     }
   }
 
@@ -538,6 +552,9 @@ export default function Recruiter() {
       {result && (
         <div className='card'>
           <h3>Analysis Result</h3>
+          <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button className="btn" style={{ backgroundColor: '#007bff' }} onClick={handleDownloadAnalysisPdf} disabled={downloadingPdf}>📄 Download PDF Report</button>
+          </div>
           {shortlist && (
             <div className='recruiter-shortlist-dashboard'>
               <div className='recruiter-shortlist-header'>

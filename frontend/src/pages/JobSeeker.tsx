@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage } from '../api/client'
+import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage, downloadAnalysisPdf, downloadCoverLetterPdf } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
 import DragAndDropUpload from '../components/DragAndDropUpload'
@@ -11,6 +11,7 @@ export default function JobSeeker() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking'>('analyze')
 
   // Networking State
@@ -69,6 +70,22 @@ export default function JobSeeker() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!result) return
+    setDownloadingPdf(true)
+    try {
+      if (activeTab === 'coverLetter') {
+        await downloadCoverLetterPdf(token, result.coverLetter || result, 'Candidate')
+      } else {
+        await downloadAnalysisPdf(token, result, 'jobSeeker', 'My Resume Analysis')
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to download PDF')
+    } finally {
+      setDownloadingPdf(false)
+    }
   }
 
   const handleNetworkingSubmit = async () => {
@@ -142,7 +159,10 @@ export default function JobSeeker() {
         <div className="card">
           <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : activeTab === 'health' ? 'Resume Health Check' : 'Skill Gap'}</h3>
           
-          <button className="btn" style={{ marginBottom: '15px', backgroundColor: '#28a745' }} onClick={handleDownload}>Download Report</button>
+          <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button className="btn" style={{ backgroundColor: '#28a745' }} onClick={handleDownload}>📥 Download JSON</button>
+            <button className="btn" style={{ backgroundColor: '#007bff' }} onClick={handleDownloadPdf} disabled={downloadingPdf}>📄 Download PDF</button>
+          </div>
           
           {activeTab === 'analyze' && (
             result.formattedReport ? <pre className="report">{result.formattedReport}</pre> : <pre>{JSON.stringify(result, null, 2)}</pre>

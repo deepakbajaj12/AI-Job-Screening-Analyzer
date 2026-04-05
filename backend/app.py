@@ -14,7 +14,7 @@ import socket
 import gc
 from datetime import datetime
 from collections import defaultdict
-from flask import Flask, request, jsonify, url_for, g
+from flask import Flask, request, jsonify, url_for, g, send_file
 from flask_cors import CORS, cross_origin
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
@@ -31,6 +31,28 @@ from email.mime.text import MIMEText
 import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+# PDF Generation
+try:
+    from backend.pdf_generator import (
+        generate_job_seeker_pdf,
+        generate_recruiter_pdf,
+        generate_cover_letter_pdf,
+        generate_coaching_report_pdf
+    )
+except ImportError:
+    try:
+        from pdf_generator import (
+            generate_job_seeker_pdf,
+            generate_recruiter_pdf,
+            generate_cover_letter_pdf,
+            generate_coaching_report_pdf
+        )
+    except ImportError:
+        generate_job_seeker_pdf = None
+        generate_recruiter_pdf = None
+        generate_cover_letter_pdf = None
+        generate_coaching_report_pdf = None
 
 # MongoDB integration
 try:
@@ -1484,8 +1506,100 @@ def history(user_info):
     return jsonify({"history": records, "count": len(records)})
 
 # =============================
-# Coaching Endpoints - existing code below
+# PDF Download Endpoints
 # =============================
+@app.route("/download/analysis-pdf", methods=["POST"])
+@auth_required
+def download_analysis_pdf(user_info):
+    """Generate and download analysis report as PDF."""
+    if not generate_job_seeker_pdf:
+        return jsonify({"error": "PDF generation not available"}), 503
+    
+    try:
+        data = request.get_json() or {}
+        result_data = data.get('result', {})
+        mode = data.get('mode', 'jobSeeker')
+        candidate_name = data.get('candidateName', 'Candidate')
+        
+        if mode == 'recruiter':
+            pdf_buffer = generate_recruiter_pdf(result_data, candidate_name)
+            filename = f"recruiter-analysis-{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        else:
+            pdf_buffer = generate_job_seeker_pdf(result_data)
+            filename = f"analysis-{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        write_audit(user_info.get('uid'), 'download.analysis_pdf', {'mode': mode})
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        logger.error(f"PDF generation error: {e}")
+        return jsonify({"error": f"Failed to generate PDF: {str(e)}"}), 500
+
+
+@app.route("/download/cover-letter-pdf", methods=["POST"])
+@auth_required
+def download_cover_letter_pdf(user_info):
+    """Generate and download cover letter as PDF."""
+    if not generate_cover_letter_pdf:
+        return jsonify({"error": "PDF generation not available"}), 503
+    
+    try:
+        data = request.get_json() or {}
+        cover_letter_text = data.get('coverLetter', '')
+        candidate_name = data.get('candidateName', '')
+        
+        if not cover_letter_text:
+            return jsonify({"error": "Cover letter text is required"}), 400
+        
+        pdf_buffer = generate_cover_letter_pdf(cover_letter_text, candidate_name)
+        filename = f"cover-letter-{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        write_audit(user_info.get('uid'), 'download.cover_letter_pdf', {})
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        logger.error(f"PDF generation error: {e}")
+        return jsonify({"error": f"Failed to generate PDF: {str(e)}"}), 500
+
+
+@app.route("/download/coaching-pdf", methods=["POST"])
+@auth_required
+def download_coaching_pdf(user_info):
+    """Generate and download coaching report as PDF."""
+    if not generate_coaching_report_pdf:
+        return jsonify({"error": "PDF generation not available"}), 503
+    
+    try:
+        data = request.get_json() or {}
+        coaching_data = data.get('data', {})
+        report_type = data.get('type', 'progress')  # progress, study_pack, interview
+        
+        pdf_buffer = generate_coaching_report_pdf(coaching_data, report_type)
+        filename = f"coaching-{report_type}-{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        write_audit(user_info.get('uid'), 'download.coaching_pdf', {'type': report_type})
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        logger.error(f"PDF generation error: {e}")
+        return jsonify({"error": f"Failed to generate PDF: {str(e)}"}), 500
+
+
 
 @app.route("/coaching/save-version", methods=["POST"])
 @auth_required

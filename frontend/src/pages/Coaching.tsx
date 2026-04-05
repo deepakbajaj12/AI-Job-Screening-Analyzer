@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { coachingProgress, coachingStudyPack, coachingInterviewQuestions, coachingDiff, coachingSaveVersion } from '../api/client'
+import { coachingProgress, coachingStudyPack, coachingInterviewQuestions, coachingDiff, coachingSaveVersion, downloadCoachingReportPdf } from '../api/client'
 import MetricsChart from '../components/MetricsChart'
 
 export default function Coaching() {
@@ -15,6 +15,7 @@ export default function Coaching() {
   const [role, setRole] = useState('Software Engineer')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [jdText, setJdText] = useState<string>('')
   const [diffData, setDiffData] = useState<any>(null)
@@ -112,6 +113,30 @@ export default function Coaching() {
     } catch (e: any) { setError(e?.message || 'Diff failed') }
   }
 
+  const handleDownloadProgressPdf = async () => {
+    if (!progress) return
+    setDownloadingPdf(true)
+    try {
+      await downloadCoachingReportPdf(token, progress, 'progress')
+    } catch (err: any) {
+      setError(err?.message || 'Failed to download PDF')
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
+  const handleDownloadStudyPackPdf = async () => {
+    if (!study) return
+    setDownloadingPdf(true)
+    try {
+      await downloadCoachingReportPdf(token, study, 'study_pack')
+    } catch (err: any) {
+      setError(err?.message || 'Failed to download PDF')
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
   return (
     <section>
       <h2>Coaching Dashboard</h2>
@@ -135,13 +160,24 @@ export default function Coaching() {
       </div>
 
       {progress?.versions && progress.versions.length > 0 ? (
-        <MetricsChart versions={progress.versions} />
+        <div>
+          <div className="card" style={{ marginBottom: '15px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3>Progress</h3>
+              <button className="btn" style={{ backgroundColor: '#007bff' }} onClick={handleDownloadProgressPdf} disabled={downloadingPdf}>📄 Download PDF</button>
+            </div>
+            <MetricsChart versions={progress.versions} />
+          </div>
+        </div>
       ) : (
         <div className="card"><h3>Progress</h3><div>Loading or no versions yet.</div></div>
       )}
 
       <div className="card">
-        <h3>Study Pack</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h3>Study Pack</h3>
+          {study && <button className="btn" style={{ backgroundColor: '#007bff' }} onClick={handleDownloadStudyPackPdf} disabled={downloadingPdf}>📄 Download PDF</button>}
+        </div>
         {study ? (
           <div>
             {study.skillGaps?.length > 0 && <p className="coaching-help-text">Found {study.skillGaps.length} skill gaps.</p>}
