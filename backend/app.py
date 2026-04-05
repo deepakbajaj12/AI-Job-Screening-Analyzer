@@ -1510,6 +1510,7 @@ def history(user_info):
 # PDF Download Endpoints
 # =============================
 @app.route("/download/analysis-pdf", methods=["POST"])
+@app.route("/api/download/analysis-pdf", methods=["POST"])
 @auth_required
 def download_analysis_pdf(user_info):
     """Generate and download analysis report as PDF."""
@@ -1543,6 +1544,7 @@ def download_analysis_pdf(user_info):
 
 
 @app.route("/download/cover-letter-pdf", methods=["POST"])
+@app.route("/api/download/cover-letter-pdf", methods=["POST"])
 @auth_required
 def download_cover_letter_pdf(user_info):
     """Generate and download cover letter as PDF."""
@@ -1574,6 +1576,7 @@ def download_cover_letter_pdf(user_info):
 
 
 @app.route("/download/coaching-pdf", methods=["POST"])
+@app.route("/api/download/coaching-pdf", methods=["POST"])
 @auth_required
 def download_coaching_pdf(user_info):
     """Generate and download coaching report as PDF."""

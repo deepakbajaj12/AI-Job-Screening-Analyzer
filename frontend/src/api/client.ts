@@ -423,6 +423,35 @@ export type RecruiterTemplate = {
   versions: RecruiterTemplateVersion[]
 }
 
+function buildPdfEndpointCandidates(path: string): string[] {
+  const cleanBase = API_BASE.replace(/\/+$/, '')
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  const hasApiSuffix = /\/api$/i.test(cleanBase)
+
+  const candidates = [
+    `${cleanBase}${cleanPath}`,
+    hasApiSuffix
+      ? `${cleanBase.replace(/\/api$/i, '')}${cleanPath}`
+      : `${cleanBase}/api${cleanPath}`,
+  ]
+
+  return Array.from(new Set(candidates))
+}
+
+async function fetchPdfWithFallback(path: string, init: RequestInit): Promise<Response> {
+  const candidates = buildPdfEndpointCandidates(path)
+  let lastResponse: Response | null = null
+
+  for (const url of candidates) {
+    const res = await fetch(url, init)
+    if (res.ok) return res
+    lastResponse = res
+    if (res.status !== 404) return res
+  }
+
+  return lastResponse as Response
+}
+
 export async function listRecruiterTemplates(token: string | null, kind?: 'email' | 'job_description') {
   const url = new URL(`${API_BASE}/recruiter/templates`)
   if (kind) url.searchParams.set('kind', kind)
@@ -477,7 +506,7 @@ export async function downloadAnalysisPdf(
   mode: 'jobSeeker' | 'recruiter' = 'jobSeeker',
   candidateName: string = 'Candidate'
 ) {
-  const res = await fetch(`${API_BASE}/download/analysis-pdf`, {
+  const res = await fetchPdfWithFallback('/download/analysis-pdf', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -511,7 +540,7 @@ export async function downloadCoverLetterPdf(
   coverLetter: string,
   candidateName: string = ''
 ) {
-  const res = await fetch(`${API_BASE}/download/cover-letter-pdf`, {
+  const res = await fetchPdfWithFallback('/download/cover-letter-pdf', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -544,7 +573,7 @@ export async function downloadCoachingReportPdf(
   data: any,
   reportType: 'progress' | 'study_pack' | 'interview' = 'progress'
 ) {
-  const res = await fetch(`${API_BASE}/download/coaching-pdf`, {
+  const res = await fetchPdfWithFallback('/download/coaching-pdf', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
