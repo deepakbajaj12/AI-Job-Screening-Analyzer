@@ -119,12 +119,13 @@ export default function Coaching() {
 
       <div className="card">
         <h3>Save New Version</h3>
+        <p className="coaching-help-text">Upload your resume and a job description to generate a personalized study pack with skill gaps and learning resources.</p>
         <form onSubmit={saveVersion}>
           <label>Resume (PDF)
             <input type="file" accept="application/pdf" onChange={e => setResumeFile(e.target.files?.[0] || null)} />
           </label>
-          <label>Job Description (optional text)
-            <textarea rows={4} value={jdText} onChange={e => setJdText(e.target.value)} />
+          <label>Job Description (paste JD with skills like Python, React, Docker, AWS)
+            <textarea rows={4} value={jdText} onChange={e => setJdText(e.target.value)} placeholder="Paste job description here. Include skills and requirements." />
           </label>
           <button className="btn" disabled={loading || !token}>{loading ? 'Saving...' : 'Save Version'}</button>
           {saveError && <div className="error coaching-inline-message">{saveError}</div>}
@@ -143,10 +144,11 @@ export default function Coaching() {
         <h3>Study Pack</h3>
         {study ? (
           <div>
+            {study.skillGaps?.length > 0 && <p className="coaching-help-text">Found {study.skillGaps.length} skill gaps.</p>}
             <div className="study-actions">
               <input
                 type="text"
-                placeholder="Search resources by skill, host, tags"
+                placeholder="Filter resources by skill name"
                 value={pendingSearch}
                 onChange={e => setPendingSearch(e.target.value)}
               />
@@ -154,9 +156,13 @@ export default function Coaching() {
             </div>
             <p>Skill Gaps:</p>
             <div className="chip-row">
-              {(study.skillGaps || []).map((g:string, i:number) => (
-                <span key={i} className="chip">{g}</span>
-              ))}
+              {(study.skillGaps || []).length > 0 ? (
+                (study.skillGaps || []).map((g:string, i:number) => (
+                  <span key={i} className="chip">{g}</span>
+                ))
+              ) : (
+                <p className="coaching-help-text">No gaps detected. Save a version with a detailed job description.</p>
+              )}
             </div>
             <p className="study-resources-label">Resources:</p>
             {study.studyPack?.length === 0 ? (
