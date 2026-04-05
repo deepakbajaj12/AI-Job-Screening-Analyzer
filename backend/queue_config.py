@@ -1,4 +1,4 @@
-// BACKGROUND JOB QUEUE: Redis-based task queue (RQ) for handling long-running analysis jobs without blocking the API
+# BACKGROUND JOB QUEUE: Redis-based task queue (RQ) for handling long-running analysis jobs without blocking the API
 import os
 import logging
 from redis import Redis

@@ -1,4 +1,4 @@
-// CONFIGURATION: Environment setup, logging configuration, and directory initialization for backend
+# CONFIGURATION: Environment setup, logging configuration, and directory initialization for backend
 import os
 from dotenv import load_dotenv
 

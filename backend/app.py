@@ -1077,6 +1077,26 @@ def set_security_headers(response):
         "script-src 'self' 'unsafe-inline'; "
         "connect-src 'self'"
     )
+
+    # Defensive CORS fallback for preflight/edge cases and Vercel preview domains.
+    origin = request.headers.get("Origin")
+    if origin:
+        normalized_allowed = set(allowed_origins if isinstance(allowed_origins, list) else [allowed_origins])
+        if (
+            origin in normalized_allowed
+            or origin.endswith(".vercel.app")
+            or origin.startswith("http://localhost")
+            or origin.startswith("http://127.0.0.1")
+        ):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = request.headers.get(
+                "Access-Control-Request-Headers",
+                "Authorization,Content-Type"
+            )
+            vary = response.headers.get("Vary", "")
+            response.headers["Vary"] = f"{vary}, Origin".strip(", ") if vary else "Origin"
     return response
 
 @app.route('/health', methods=['GET'])
