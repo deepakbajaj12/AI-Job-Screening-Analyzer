@@ -706,6 +706,73 @@ def extract_json_from_text(text):
         logger.info(f"json.raw_response snippet={text[:200]}")
         return None
 
+def normalize_linkedin_profile(parsed, fallback_text=""):
+    """Normalize LinkedIn payload to a stable shape for frontend rendering."""
+    parsed = parsed if isinstance(parsed, dict) else {}
+
+    headline = parsed.get("headline")
+    if isinstance(headline, dict):
+        headline = headline.get("text") or headline.get("value")
+    if not isinstance(headline, str) or not headline.strip():
+        headline = "Results-Driven Professional | Data, Analytics, and AI"
+
+    about_value = parsed.get("about")
+    if isinstance(about_value, dict):
+        about = (
+            about_value.get("summary")
+            or about_value.get("text")
+            or about_value.get("about")
+            or ""
+        )
+    elif isinstance(about_value, list):
+        about = "\n\n".join(str(x).strip() for x in about_value if str(x).strip())
+    else:
+        about = about_value if isinstance(about_value, str) else ""
+
+    if not about.strip():
+        cleaned = re.sub(r"```(?:json)?", "", fallback_text or "", flags=re.IGNORECASE).replace("```", "").strip()
+        about = cleaned[:1400] if cleaned else "Professional summary is not available right now."
+
+    highlights = (
+        parsed.get("experience_highlights")
+        or parsed.get("experienceHighlights")
+        or parsed.get("highlights")
+        or []
+    )
+    if isinstance(highlights, str):
+        highlights = [
+            line.strip(" -•\t")
+            for line in re.split(r"\r?\n+", highlights)
+            if line.strip(" -•\t")
+        ]
+    elif isinstance(highlights, list):
+        cleaned_list = []
+        for item in highlights:
+            if isinstance(item, str):
+                text = item.strip()
+            elif isinstance(item, dict):
+                text = str(item.get("summary") or item.get("text") or item.get("value") or "").strip()
+            else:
+                text = str(item).strip()
+            if text:
+                cleaned_list.append(text)
+        highlights = cleaned_list
+    else:
+        highlights = []
+
+    if not highlights:
+        highlights = [
+            "Demonstrated strong ownership in building data-driven project outcomes.",
+            "Applied Python, SQL, and analytics techniques to improve decision quality.",
+            "Built practical AI-enabled workflows with a focus on usability and impact.",
+        ]
+
+    return {
+        "headline": headline.strip(),
+        "about": about.strip(),
+        "experience_highlights": highlights[:8],
+    }
+
 def ensure_non_empty_fields(data):
     # Provide fallback defaults if empty or missing fields
     defaults = {
@@ -2004,17 +2071,16 @@ def generate_linkedin_profile(user_info):
         if not response:
             return jsonify({'error': 'Failed to generate profile'}), 500
             
-        try:
-            # Try to parse JSON if the LLM returns it wrapped in code blocks
-            clean_response = response.replace("```json", "").replace("```", "").strip()
-            result = json.loads(clean_response)
-        except:
-            # If JSON parsing fails, return raw response in a way the frontend can display or debug
-            result = {
-                "headline": "Error parsing AI response",
-                "about": response, 
-                "experience_highlights": ["Could not parse structured data"]
-            }
+        parsed = extract_json_from_text(response)
+        if parsed is None:
+            # Fallback for responses that are plain JSON without wrappers.
+            try:
+                clean_response = re.sub(r"```(?:json)?", "", response, flags=re.IGNORECASE).replace("```", "").strip()
+                parsed = json.loads(clean_response)
+            except Exception:
+                parsed = {}
+
+        result = normalize_linkedin_profile(parsed, fallback_text=response)
             
         return jsonify(result)
     except Exception as e:
