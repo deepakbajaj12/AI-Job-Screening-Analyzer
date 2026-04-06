@@ -2464,7 +2464,7 @@ def estimate_salary(user_info):
     try:
         task = estimate_salary_task.apply_async(
             args=[resume_text, job_description, user_info.get("uid", "anonymous")],
-            timeout=90
+            timeout=300
         )
         return jsonify({
             "status": "queued",
@@ -2499,7 +2499,7 @@ def tailor_resume(user_info):
     try:
         task = tailor_resume_task.apply_async(
             args=[resume_text, job_description, user_info.get("uid", "anonymous")],
-            timeout=90
+            timeout=300
         )
         return jsonify({
             "status": "queued",
@@ -2533,7 +2533,7 @@ def generate_career_path(user_info):
     try:
         task = generate_career_path_task.apply_async(
             args=[resume_text, user_info.get("uid", "anonymous")],
-            timeout=90
+            timeout=300
         )
         return jsonify({
             "status": "queued",

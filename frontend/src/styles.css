@@ -935,3 +935,514 @@ pre {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ============================================================================
+   MOBILE RESPONSIVE BREAKPOINTS - Enhanced Mobile Experience
+   ============================================================================ */
+
+/* Tablet & Landscape (768px and below) */
+@media (max-width: 768px) {
+  :root {
+    --radius: 6px;
+  }
+
+  body {
+    font-size: 15px;
+  }
+
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.25rem; }
+
+  main {
+    padding: 24px 16px;
+  }
+
+  .container {
+    flex-direction: column;
+  }
+
+  .navbar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .navbar nav {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .navbar .right {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .btn {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  input[type="file"], input[type="email"], input[type="text"], input[type="password"], input[type="tel"], textarea, select {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  .diff-container {
+    gap: 16px;
+  }
+
+  .diff-section {
+    padding: 12px;
+  }
+
+  .diff-table {
+    font-size: 0.75rem;
+  }
+
+  .diff-table th,
+  .diff-table td {
+    padding: 8px;
+  }
+
+  .diff-summary {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .interview-chat-log {
+    height: 300px;
+  }
+
+  .interview-msg {
+    max-width: 85%;
+  }
+
+  .landing-shell {
+    padding: 56px 16px 40px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(1.75rem, 5vw, 2.5rem);
+  }
+}
+
+/* Mobile Phone Portrait (640px and below) */
+@media (max-width: 640px) {
+  :root {
+    --radius: 5px;
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.1rem; }
+
+  main {
+    padding: 16px 12px;
+  }
+
+  .navbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .navbar .brand a {
+    font-size: 1rem;
+  }
+
+  .navbar nav a {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .card {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  input[type="file"], input[type="email"], input[type="text"], input[type="password"], input[type="tel"], textarea, select {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  label {
+    font-size: 0.8rem;
+  }
+
+  .chip-row {
+    gap: 4px;
+  }
+
+  .chip {
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+
+  .drag-drop-zone {
+    padding: 2rem;
+  }
+
+  .diff-container {
+    gap: 12px;
+  }
+
+  .diff-section {
+    padding: 10px;
+  }
+
+  .diff-section h4 {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+  }
+
+  .diff-meta {
+    font-size: 0.8rem;
+  }
+
+  .skills-change {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+
+  .skills-change strong {
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+  }
+
+  .skills-list {
+    gap: 4px;
+  }
+
+  .skill-tag-added,
+  .skill-tag-removed {
+    padding: 2px 8px;
+    font-size: 0.7rem;
+  }
+
+  .diff-table {
+    font-size: 0.65rem;
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .diff-table thead,
+  .diff-table tbody,
+  .diff-table th,
+  .diff-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .diff-table th,
+  .diff-table td {
+    padding: 6px;
+    text-align: left !important;
+  }
+
+  .diff-table tbody tr {
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px;
+  }
+
+  .diff-summary {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .summary-item {
+    gap: 6px;
+  }
+
+  .summary-item span {
+    font-size: 0.75rem;
+  }
+
+  .toast {
+    right: 12px;
+    bottom: 12px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  .interview-chat-log {
+    height: 250px;
+  }
+
+  .interview-msg {
+    max-width: 90%;
+    font-size: 0.9rem;
+  }
+
+  .interview-form {
+    flex-direction: column;
+  }
+
+  .interview-input,
+  .interview-mic-btn,
+  .interview-end-btn {
+    width: 100%;
+  }
+
+  .landing-shell {
+    padding: 40px 12px 30px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(1.5rem, 4vw, 2rem);
+  }
+
+  .landing-tagline {
+    font-size: clamp(0.9rem, 2vw, 1.2rem);
+  }
+
+  .landing-copy {
+    font-size: 0.9rem;
+  }
+
+  .landing-cta {
+    width: 100%;
+    max-width: none;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+  }
+
+  .landing-auth-card {
+    max-width: 100%;
+    padding: 12px;
+    margin: 20px auto 0;
+  }
+
+  .landing-kicker {
+    font-size: 0.65rem;
+    padding: 4px 8px;
+  }
+
+  .landing-features {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+    margin: 30px auto 0;
+  }
+
+  .landing-feature-item {
+    padding: 12px;
+  }
+}
+
+/* Small Phone (480px and below) */
+@media (max-width: 480px) {
+  :root {
+    --radius: 4px;
+  }
+
+  body {
+    font-size: 13px;
+  }
+
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1rem; }
+  h3 { font-size: 0.95rem; }
+
+  main {
+    padding: 12px 8px;
+  }
+
+  .navbar {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .navbar .brand a {
+    font-size: 0.9rem;
+  }
+
+  .navbar nav a {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+  }
+
+  .card {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+
+  .btn {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+  }
+
+  input[type="file"], input[type="email"], input[type="text"], input[type="password"], input[type="tel"], textarea, select {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+  }
+
+  label {
+    font-size: 0.75rem;
+  }
+
+  .error {
+    padding: 8px;
+    font-size: 0.75rem;
+  }
+
+  .badge {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  .drag-drop-zone {
+    padding: 1.5rem;
+  }
+
+  .diff-section {
+    padding: 8px;
+  }
+
+  .diff-section h4 {
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+  }
+
+  .diff-meta {
+    font-size: 0.75rem;
+  }
+
+  .skills-change {
+    padding: 6px;
+    margin-bottom: 6px;
+  }
+
+  .skills-change strong {
+    margin-bottom: 4px;
+    font-size: 0.75rem;
+  }
+
+  .skill-tag-added,
+  .skill-tag-removed {
+    padding: 2px 6px;
+    font-size: 0.65rem;
+  }
+
+  .diff-table {
+    font-size: 0.6rem;
+  }
+
+  .diff-table th,
+  .diff-table td {
+    padding: 4px;
+  }
+
+  .diff-summary {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .summary-item {
+    gap: 4px;
+  }
+
+  .summary-item span {
+    font-size: 0.7rem;
+  }
+
+  .landing-shell {
+    padding: 30px 10px 20px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(1.2rem, 3vw, 1.5rem);
+  }
+
+  .landing-tagline {
+    font-size: clamp(0.8rem, 1.5vw, 1rem);
+    margin: 12px 0 10px;
+  }
+
+  .landing-copy {
+    font-size: 0.8rem;
+    margin: 0 auto;
+  }
+
+  .landing-cta {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    margin-top: 20px;
+  }
+
+  .landing-auth-card {
+    padding: 10px;
+    margin: 15px auto 0;
+  }
+
+  .landing-kicker {
+    font-size: 0.6rem;
+    padding: 3px 6px;
+  }
+
+  .interview-chat-log {
+    height: 200px;
+  }
+
+  .interview-msg {
+    max-width: 95%;
+    font-size: 0.85rem;
+  }
+
+  .interview-speaking-bubble {
+    max-width: 95%;
+  }
+}
+
+/* Extra small device fixes */
+@media (max-width: 360px) {
+  .navbar {
+    padding: 6px;
+  }
+
+  main {
+    padding: 8px 6px;
+  }
+
+  .card {
+    padding: 6px;
+  }
+
+  .diff-section {
+    padding: 6px;
+  }
+
+  h1 { font-size: 1.1rem; }
+  h2 { font-size: 0.9rem; }
+}
+}
