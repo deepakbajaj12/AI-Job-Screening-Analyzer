@@ -614,6 +614,8 @@ def call_llm(prompt, temperature=0.6):
       openai:gpt-4o
       openai:gpt-5-codex-preview  (placeholder / preview)
     Returns plaintext string or None on failure.
+    Note: Cohere SDK doesn't support timeout in chat() method.
+          Use cache + fallback strategy for slow responses.
     """
     provider, model = (LLM_MODEL.split(":", 1) + [""])[:2]
     provider = provider.lower()
@@ -638,11 +640,11 @@ def call_llm(prompt, temperature=0.6):
                 result = _get_mock_response(prompt)
             else:
                 try:
+                    # Note: Cohere SDK doesn't support timeout parameter
                     resp = cohere_client.chat(
                         model=model,
                         message=prompt,
-                        temperature=temperature,
-                        timeout=30.0
+                        temperature=temperature
                     )
                     result = resp.text.strip()
                 except Exception as llm_err:
@@ -653,13 +655,17 @@ def call_llm(prompt, temperature=0.6):
                 logger.warning("llm.openai_not_configured")
                 result = _get_mock_response(prompt)
             else:
-                resp = openai_client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=temperature,
-                    timeout=30.0
-                )
-                result = resp.choices[0].message.content.strip()
+                try:
+                    # OpenAI timeout is set at client initialization level
+                    resp = openai_client.chat.completions.create(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=temperature
+                    )
+                    result = resp.choices[0].message.content.strip()
+                except Exception as e:
+                    logger.error(f"OpenAI API call failed: {e}")
+                    result = _get_mock_response(prompt)
         else:
             logger.warning(f"llm.unsupported_provider provider={provider}")
             result = _get_mock_response(prompt)
