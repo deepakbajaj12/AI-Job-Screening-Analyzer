@@ -85,15 +85,26 @@ async function pollJob(jobId: string, maxWaitMs = 300000, initialDelayMs = 1000)
         const data = await res.json()
         if (data.status === 'finished' || data.status === 'completed') return data.result
         if (data.status === 'failed') throw new Error(data.error || 'Analysis failed')
+        if (data.status === 'unknown') {
+          // Job was cleaned up from Redis - this is normal for completed jobs
+          if (data.result) return data.result
+          throw new Error('Job completed but result is no longer available. Please try again.')
+        }
         // If status is "queued" or "started", we keep waiting
       } else if (res.status === 404) {
-        throw new Error('Job not found')
+        // Job not found - stop polling immediately instead of waiting for timeout
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Job not found. It may have expired.')
       }
     } catch (error: any) {
+      // Don't retry on job-specific errors, only on network errors
+      if (error.message.includes('Job')) {
+        throw error
+      }
       // Network error, retry with exponential backoff
       if (error.message.includes('fetch')) {
         // Continue polling on network errors
-      } else {
+      } else if (!error.message.includes('fetch')) {
         throw error
       }
     }
@@ -104,6 +115,38 @@ async function pollJob(jobId: string, maxWaitMs = 300000, initialDelayMs = 1000)
   }
   
   throw new Error(`Analysis timed out after ${maxWaitMs / 1000}s. Please check back later.`)
+}
+
+async function pollTask(taskId: string, maxWaitMs = 300000, initialDelayMs = 1000) {
+  let delayMs = initialDelayMs
+  const startTime = Date.now()
+
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(r => setTimeout(r, delayMs))
+
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`)
+      if (res.ok) {
+        const data = await res.json()
+        const state = String(data.state || '').toUpperCase()
+
+        if (state === 'SUCCESS') return data.result
+        if (state === 'FAILURE' || state === 'REVOKED') throw new Error(data.error || 'Task failed')
+        // PENDING/RECEIVED/STARTED/RETRY -> keep polling
+      } else if (res.status === 404) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Task not found. It may have expired.')
+      }
+    } catch (error: any) {
+      if (error.message.includes('Task')) throw error
+      if (!error.message.includes('fetch')) throw error
+      // Network errors are retried by continuing polling.
+    }
+
+    delayMs = Math.min(delayMs * 1.5, 5000)
+  }
+
+  throw new Error(`Task timed out after ${maxWaitMs / 1000}s. Please check back later.`)
 }
 
 export async function analyzeJobSeeker(token: string | null, payload: { resume: File, jobDescription: string }) {
@@ -336,9 +379,9 @@ export async function estimateSalary(token: string | null, payload: { resume: Fi
   if (!res.ok) throw new Error(`Salary estimation failed: ${res.status}`)
   const data = await res.json()
   
-  // Handle async job response - poll for result like /analyze does
+  // Salary endpoint is Celery-backed; poll via /tasks.
   if (data.job_id) {
-    return pollJob(data.job_id)
+    return pollTask(data.job_id)
   }
   // Handle sync response fallback
   if (data.result) {
@@ -359,9 +402,9 @@ export async function tailorResume(token: string | null, payload: { resume: File
   if (!res.ok) throw new Error(`Resume tailoring failed: ${res.status}`)
   const data = await res.json()
   
-  // Handle async job response - poll for result like /analyze does
+  // Tailor endpoint is Celery-backed; poll via /tasks.
   if (data.job_id) {
-    return pollJob(data.job_id)
+    return pollTask(data.job_id)
   }
   // Handle sync response fallback
   if (data.result) {
@@ -381,9 +424,9 @@ export async function generateCareerPath(token: string | null, payload: { resume
   if (!res.ok) throw new Error(`Career path generation failed: ${res.status}`)
   const data = await res.json()
   
-  // Handle async job response - poll for result like /analyze does
+  // Career path endpoint is Celery-backed; poll via /tasks.
   if (data.job_id) {
-    return pollJob(data.job_id)
+    return pollTask(data.job_id)
   }
   // Handle sync response fallback
   if (data.result) {

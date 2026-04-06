@@ -1,4 +1,4 @@
-# MAIN APPLICATION: Flask server with 30+ endpoints for AI-powered resume analysis, recruiter tools, and coaching for both job seekers and recruiters
+﻿# MAIN APPLICATION: Flask server with 30+ endpoints for AI-powered resume analysis, recruiter tools, and coaching for both job seekers and recruiters
 import os
 import sys
 # Add parent directory to path to ensure backend module can be imported
@@ -862,9 +862,9 @@ def normalize_linkedin_profile(parsed, fallback_text=""):
     )
     if isinstance(highlights, str):
         highlights = [
-            line.strip(" -•\t")
+            line.strip(" -â€¢\t")
             for line in re.split(r"\r?\n+", highlights)
-            if line.strip(" -•\t")
+            if line.strip(" -â€¢\t")
         ]
     elif isinstance(highlights, list):
         cleaned_list = []
@@ -922,7 +922,7 @@ def format_general_feedback(feedback_text):
 
     # Split feedback by lines or common separators (numbers, dashes, newlines)
     lines = re.split(r"\n+|\d+\.\s+|- ", feedback_text)
-    cleaned = [line.strip("-• \n\t").strip() for line in lines if line.strip()]
+    cleaned = [line.strip("-â€¢ \n\t").strip() for line in lines if line.strip()]
 
     # Return bullet points for each meaningful line
     return "\n".join(f"- {line}" for line in cleaned)
@@ -934,18 +934,18 @@ def format_report(data):
     feedback = format_general_feedback(data["generalFeedback"])
 
     report = f"""
-📈 Detailed Candidate Report
+ðŸ“ˆ Detailed Candidate Report
 
-🟢 Strengths:
+ðŸŸ¢ Strengths:
 {strengths}
 
-🟡 Areas to Improve:
+ðŸŸ¡ Areas to Improve:
 {improvements}
 
-🔵 Recommended Roles:
+ðŸ”µ Recommended Roles:
 {recommended}
 
-📝 General Feedback:
+ðŸ“ General Feedback:
 {feedback}
 """
     return report.strip()
@@ -1004,8 +1004,8 @@ def extract_bullets(text):
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     bullets = []
     for line in lines:
-        if re.match(r"^[-*•]", line) or len(line.split()) > 4:
-            bullets.append(line.lstrip("-*• ").strip())
+        if re.match(r"^[-*â€¢]", line) or len(line.split()) > 4:
+            bullets.append(line.lstrip("-*â€¢ ").strip())
     return bullets[:100]
 
 def detect_skills(text):
@@ -1580,7 +1580,7 @@ JOB DESCRIPTION:
 {trimmed_jd}
 
 Return JSON with:
-- estimated_salary_range: e.g. "₹50L - ₹75L p.a."
+- estimated_salary_range: e.g. "â‚¹50L - â‚¹75L p.a."
 - currency: "INR"
 - experience_level: "entry level", "mid level", "senior"
 - market_trends: Market insight for this role in India
@@ -1593,7 +1593,7 @@ Respond ONLY with valid JSON.'''
         if not response:
             if benchmark:
                 return {
-                    "estimated_salary_range": f"₹{benchmark['min']/100000:.0f}L - ₹{benchmark['max']/100000:.0f}L p.a.",
+                    "estimated_salary_range": f"â‚¹{benchmark['min']/100000:.0f}L - â‚¹{benchmark['max']/100000:.0f}L p.a.",
                     "currency": "INR",
                     "experience_level": benchmark.get("experience", "Not specified"),
                     "market_trends": f"Strong market demand for {detected_role} in 2025-2026.",
@@ -1721,23 +1721,33 @@ Respond ONLY with valid JSON.'''
 
 @app.route('/tasks/<task_id>', methods=['GET'])
 def get_task_status(task_id):
-    task = run_analysis_task.AsyncResult(task_id)
-    if task.state == 'PENDING':
+    try:
+        task = celery.AsyncResult(task_id)
+        state = (task.state or '').upper()
+
+        if state in ('PENDING', 'RECEIVED', 'RETRY'):
+            return jsonify({
+                'state': state,
+                'status': 'Pending...'
+            })
+        if state in ('STARTED',):
+            return jsonify({
+                'state': state,
+                'status': 'Processing...'
+            })
+        if state == 'SUCCESS':
+            return jsonify({
+                'state': state,
+                'result': task.result
+            })
+
         return jsonify({
-            'state': task.state,
-            'status': 'Pending...'
-        })
-    elif task.state != 'FAILURE':
-        return jsonify({
-            'state': task.state,
-            'result': task.result
-        })
-    else:
-        return jsonify({
-            'state': task.state,
+            'state': state or 'FAILURE',
             'error': str(task.info)
         })
-
+    except Exception as e:
+        logger.error(f"Error fetching celery task status: {e}")
+        return jsonify({'state': 'FAILURE', 'error': str(e)}), 500
 @app.route("/analyze", methods=["POST"])
 @cross_origin()
 @rate_limit(40, 60)
@@ -1858,43 +1868,58 @@ def analyze(user_info):
 
 @app.route("/status/<job_id>", methods=["GET"])
 def job_status(job_id):
+    # 1) Try RQ jobs first (used by /analyze)
     try:
         from rq.job import Job
-        
-        # Robust import for redis_conn
+
+        redis_conn = None
         try:
-            from backend.queue_config import redis_conn
-        except ImportError:
+            from backend.queue_config import redis_conn as _redis_conn
+            redis_conn = _redis_conn
+        except Exception:
             try:
-                from queue_config import redis_conn
-            except ImportError:
-                 # Fallback for when running directly inside backend
-                 import sys
-                 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-                 from queue_config import redis_conn
+                from queue_config import redis_conn as _redis_conn
+                redis_conn = _redis_conn
+            except Exception:
+                redis_conn = None
 
-        job = Job.fetch(job_id, connection=redis_conn)
-
-        if job.get_status() == "finished":
-             return jsonify({
-                "status": "finished",
-                "result": job.result
-            })
-        elif job.get_status() == "failed":
-             return jsonify({
-                "status": "failed",
-                "error": str(job.exc_info)
-            })
-        else:
-             return jsonify({
-                "status": job.get_status()
-            })
+        if redis_conn:
+            try:
+                job = Job.fetch(job_id, connection=redis_conn)
+                rq_status = (job.get_status() or '').lower()
+                if rq_status == 'finished':
+                    return jsonify({'status': 'finished', 'result': job.result})
+                if rq_status == 'failed':
+                    return jsonify({'status': 'failed', 'error': str(job.exc_info)})
+                return jsonify({'status': rq_status or 'queued'})
+            except Exception as e:
+                # RQ may raise different exception types for unknown jobs.
+                if 'No such job' not in str(e):
+                    logger.warning(f"RQ job fetch error for {job_id}: {e}")
     except Exception as e:
-        logger.error(f"Error fetching job status: {e}")
-        return jsonify({"error": str(e)}), 500
+        logger.warning(f"RQ status lookup unavailable: {e}")
 
-# =============================
-# History / Dashboard Endpoint
+    # 2) Fallback to Celery tasks (used by salary/tailor/career)
+    try:
+        task = celery.AsyncResult(job_id)
+        state = (task.state or '').upper()
+
+        if state == 'SUCCESS':
+            return jsonify({'status': 'finished', 'result': task.result})
+        if state in ('PENDING', 'RECEIVED', 'RETRY'):
+            return jsonify({'status': 'queued'})
+        if state == 'STARTED':
+            return jsonify({'status': 'started'})
+        if state in ('FAILURE', 'REVOKED'):
+            return jsonify({'status': 'failed', 'error': str(task.info)})
+    except Exception as e:
+        logger.warning(f"Celery status lookup unavailable: {e}")
+
+    return jsonify({
+        'status': 'unknown',
+        'message': 'Job not found. It may have completed and been cleaned up.'
+    }), 404
+# =============================`r`n# History / Dashboard Endpoint
 # =============================
 @app.route("/history", methods=["GET"])
 @auth_required
@@ -2801,4 +2826,6 @@ def generate_networking_message(user_info):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+
+
 
