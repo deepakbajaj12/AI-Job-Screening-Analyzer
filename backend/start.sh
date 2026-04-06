@@ -5,8 +5,8 @@ set -e
 gunicorn --bind 0.0.0.0:$PORT --timeout 120 backend.app:app &
 GUNICORN_PID=$!
 
-# Start async worker in background.
-celery -A backend.app.celery worker --loglevel=info &
+# Start async worker in low-memory mode for 512MB instances.
+celery -A backend.app.celery worker --loglevel=info --pool=solo --concurrency=1 &
 CELERY_PID=$!
 
 cleanup() {
