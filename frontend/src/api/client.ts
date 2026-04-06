@@ -316,7 +316,17 @@ export async function estimateSalary(token: string | null, payload: { resume: Fi
     body: form
   })
   if (!res.ok) throw new Error(`Salary estimation failed: ${res.status}`)
-  return res.json()
+  const data = await res.json()
+  
+  // Handle async job response - poll for result like /analyze does
+  if (data.job_id) {
+    return pollJob(data.job_id)
+  }
+  // Handle sync response fallback
+  if (data.result) {
+    return data.result
+  }
+  return data
 }
 
 export async function tailorResume(token: string | null, payload: { resume: File, jobDescription: string }) {
@@ -329,7 +339,17 @@ export async function tailorResume(token: string | null, payload: { resume: File
     body: form
   })
   if (!res.ok) throw new Error(`Resume tailoring failed: ${res.status}`)
-  return res.json()
+  const data = await res.json()
+  
+  // Handle async job response - poll for result like /analyze does
+  if (data.job_id) {
+    return pollJob(data.job_id)
+  }
+  // Handle sync response fallback
+  if (data.result) {
+    return data.result
+  }
+  return data
 }
 
 export async function generateCareerPath(token: string | null, payload: { resume: File }) {
@@ -341,7 +361,17 @@ export async function generateCareerPath(token: string | null, payload: { resume
     body: form
   })
   if (!res.ok) throw new Error(`Career path generation failed: ${res.status}`)
-  return res.json()
+  const data = await res.json()
+  
+  // Handle async job response - poll for result like /analyze does
+  if (data.job_id) {
+    return pollJob(data.job_id)
+  }
+  // Handle sync response fallback
+  if (data.result) {
+    return data.result
+  }
+  return data
 }
 
 export async function generateJobDescription(token: string | null, payload: { title: string, skills: string, experience: string }) {

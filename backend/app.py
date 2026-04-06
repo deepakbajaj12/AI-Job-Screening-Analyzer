@@ -761,10 +761,44 @@ def generate_endpoint_cache_key(resume_text, job_description, endpoint_type):
     """
     Generate deterministic cache key for endpoint responses.
     Hash: (resume_text + job_description + endpoint_type)
-    Used for /estimate-salary, /generate-career-path, /tailor-resume
+    Used for /analyze, /estimate-salary, /generate-career-path, /tailor-resume
     """
     raw = f"{endpoint_type}::{hashlib.md5(resume_text.encode()).hexdigest()}::{hashlib.md5(job_description.encode()).hexdigest()}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+def get_cached_analysis(resume_text, job_description, endpoint_type):
+    """
+    Check if analysis result is cached.
+    Returns cached result if found, None otherwise.
+    Cache TTL: 7 days (604800 seconds)
+    """
+    if not redis_client:
+        return None
+    
+    try:
+        cache_key = f"analysis_v2:{generate_endpoint_cache_key(resume_text, job_description, endpoint_type)}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            logger.info(f"cache.analysis_hit endpoint={endpoint_type}")
+            return json.loads(cached.decode('utf-8'))
+    except Exception as e:
+        logger.warning(f"cache.analysis_read_error error={e}")
+    
+    return None
+
+def cache_analysis_result(resume_text, job_description, endpoint_type, result):
+    """
+    Save analysis result to cache with 7-day TTL.
+    """
+    if not redis_client:
+        return
+    
+    try:
+        cache_key = f"analysis_v2:{generate_endpoint_cache_key(resume_text, job_description, endpoint_type)}"
+        redis_client.setex(cache_key, 604800, json.dumps(result))  # 7 days = 604800 seconds
+        logger.info(f"cache.analysis_saved endpoint={endpoint_type}")
+    except Exception as e:
+        logger.warning(f"cache.analysis_write_error error={e}")
 
 def call_cohere_api(prompt):
     """Backward compatibility wrapper using unified call."""
@@ -1381,6 +1415,12 @@ def time_info():
 def run_analysis_task(self, mode, resume_text, job_desc_text, recruiter_email, user_info):
     start = time.time()
     
+    # Check cache first (0.1s if hit, saves 90+ seconds of LLM call)
+    cache_result = get_cached_analysis(resume_text, job_desc_text, mode)
+    if cache_result:
+        logger.info(f"analysis.cache_used mode={mode} saved_time_seconds={time.time() - start}")
+        return cache_result
+    
     if mode == "jobSeeker":
         prompt = f"""
 You are an expert AI career coach and HR specialist.
@@ -1423,6 +1463,8 @@ Job Description:
         if semantic_score is not None:
              final_result['semanticMatchPercentage'] = semantic_score
         
+        # Cache the result for future requests (7 days TTL)
+        cache_analysis_result(resume_text, job_desc_text, mode, final_result)
         return final_result
 
     elif mode == "recruiter":
@@ -1488,6 +1530,9 @@ Job Description:
         )
             
         final_result["formattedReport"] = format_report(final_result)
+        
+        # Cache the result for future requests (7 days TTL)
+        cache_analysis_result(resume_text, job_desc_text, mode, final_result)
         return final_result
     
     return {"error": "Invalid mode"}
