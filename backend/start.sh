@@ -1,10 +1,21 @@
 #!/bin/bash
-# Start the RQ worker in the background (used by /analyze queue)
+set -e
+
+# Open the HTTP port as early as possible to avoid Render wake-time routing 503s.
+gunicorn --bind 0.0.0.0:$PORT --timeout 120 backend.app:app &
+GUNICORN_PID=$!
+
+# Start async workers in background.
 rq worker resume-tasks --url "$REDIS_URL" &
-
-# Start the Celery worker in the background (used by salary/tailor/career async tasks)
+RQ_PID=$!
 celery -A backend.app.celery worker --loglevel=info &
+CELERY_PID=$!
 
-# Start the Gunicorn web server
-# The exec command replaces the shell with the gunicorn process, handling signals correctly
-exec gunicorn --bind 0.0.0.0:$PORT --timeout 120 backend.app:app
+cleanup() {
+	kill "$RQ_PID" "$CELERY_PID" "$GUNICORN_PID" 2>/dev/null || true
+}
+
+trap cleanup SIGTERM SIGINT
+
+# Keep container tied to the web process lifecycle.
+wait "$GUNICORN_PID"
