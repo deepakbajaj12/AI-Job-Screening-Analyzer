@@ -176,6 +176,21 @@ except Exception as e:
     FIREBASE_AVAILABLE = False
 
 # =============================
+# India Salary Benchmarks (2025-2026)
+# =============================
+INDIA_SALARY_BENCHMARKS = {
+    "junior_developer": {"min": 300000, "max": 600000, "currency": "INR", "experience": "0-2 years"},
+    "mid_level_developer": {"min": 600000, "max": 1200000, "currency": "INR", "experience": "2-5 years"},
+    "senior_developer": {"min": 1200000, "max": 2500000, "currency": "INR", "experience": "5-8 years"},
+    "tech_lead": {"min": 1800000, "max": 3500000, "currency": "INR", "experience": "7+ years"},
+    "data_scientist": {"min": 800000, "max": 2000000, "currency": "INR", "experience": "2-5 years"},
+    "ml_engineer": {"min": 1000000, "max": 2500000, "currency": "INR", "experience": "3-6 years"},
+    "devops_engineer": {"min": 700000, "max": 1800000, "currency": "INR", "experience": "2-5 years"},
+    "qa_engineer": {"min": 400000, "max": 900000, "currency": "INR", "experience": "2-4 years"},
+    "product_manager": {"min": 900000, "max": 2200000, "currency": "INR", "experience": "3-6 years"},
+}
+
+# =============================
 # LLM / Model Provider Setup
 # =============================
 COHERE_API_KEY = config.COHERE_API_KEY
@@ -626,7 +641,8 @@ def call_llm(prompt, temperature=0.6):
                     resp = cohere_client.chat(
                         model=model,
                         message=prompt,
-                        temperature=temperature
+                        temperature=temperature,
+                        timeout=30.0
                     )
                     result = resp.text.strip()
                 except Exception as llm_err:
@@ -640,7 +656,8 @@ def call_llm(prompt, temperature=0.6):
                 resp = openai_client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=temperature
+                    temperature=temperature,
+                    timeout=30.0
                 )
                 result = resp.choices[0].message.content.strip()
         else:
@@ -691,6 +708,48 @@ def extract_text_from_pdf(file_storage):
     except Exception as e:
         logger.error(f"pdf.extract_error error={e}")
         return None
+
+def trim_resume_for_prompt(resume_text, max_length=800):
+    """
+    Extract only relevant resume sections to reduce token size.
+    Returns: first 2-3 sections (summary, top skills, headline) up to max_length chars.
+    Reduces LLM input size by 70-80% while preserving context.
+    """
+    if not resume_text:
+        return ""
+    
+    sections = parse_resume_sections(resume_text)
+    trimmed_parts = []
+    
+    # Add summary (most relevant)
+    if 'summary' in sections:
+        trimmed_parts.append(sections['summary'][:400])
+    elif 'profile' in sections:
+        trimmed_parts.append(sections['profile'][:400])
+    
+    # Add skills list if available
+    if 'skills_list_raw' in sections:
+        skills_str = ", ".join(sections['skills_list_raw'][:15])  # Top 15 skills
+        trimmed_parts.append(f"Key Skills: {skills_str}")
+    elif 'skills' in sections:
+        trimmed_parts.append(sections['skills'][:300])
+    
+    # Add top 1-2 experience bullets
+    if 'experience' in sections:
+        exp_lines = sections['experience'].split('\n')[:2]
+        trimmed_parts.append("\n".join(exp_lines)[:400])
+    
+    trimmed = "\n".join(trimmed_parts)
+    return trimmed[:max_length]
+
+def generate_endpoint_cache_key(resume_text, job_description, endpoint_type):
+    """
+    Generate deterministic cache key for endpoint responses.
+    Hash: (resume_text + job_description + endpoint_type)
+    Used for /estimate-salary, /generate-career-path, /tailor-resume
+    """
+    raw = f"{endpoint_type}::{hashlib.md5(resume_text.encode()).hexdigest()}::{hashlib.md5(job_description.encode()).hexdigest()}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 def call_cohere_api(prompt):
     """Backward compatibility wrapper using unified call."""
@@ -1417,6 +1476,189 @@ Job Description:
         return final_result
     
     return {"error": "Invalid mode"}
+
+@celery.task(bind=True)
+def estimate_salary_task(self, resume_text, job_description, user_id="anonymous"):
+    """
+    Background task: Estimate salary based on resume and job description.
+    Includes India salary benchmarks (2025-2026).
+    Uses trimmed resume to reduce tokens and improve speed.
+    """
+    try:
+        # Try to detect role from resume
+        resume_lower = resume_text.lower()
+        detected_role = None
+        
+        # Try to match known roles
+        role_keywords = {
+            "junior_developer": ["junior", "entry level", "fresher"],
+            "mid_level_developer": ["mid level", "mid-level", "experience"],
+            "senior_developer": ["senior", "lead", "architect"],
+            "data_scientist": ["data scientist", "ml", "machine learning"],
+            "devops_engineer": ["devops", "infrastructure", "kubernetes"],
+            "qa_engineer": ["qa engineer", "test", "quality assurance"],
+        }
+        
+        for role, keywords in role_keywords.items():
+            if any(kw in resume_lower for kw in keywords):
+                detected_role = role
+                break
+        
+        benchmark = None
+        if detected_role and detected_role in INDIA_SALARY_BENCHMARKS:
+            benchmark = INDIA_SALARY_BENCHMARKS[detected_role]
+        
+        # Use trimmed resume to reduce tokens
+        trimmed_resume = trim_resume_for_prompt(resume_text, max_length=800)
+        trimmed_jd = job_description[:800] if job_description else ""
+        
+        prompt = f'''Based on candidate resume and job description, estimate salary for India market 2025-2026.
+        
+RESUME (KEY SECTIONS):
+{trimmed_resume}
+
+JOB DESCRIPTION:
+{trimmed_jd}
+
+Return JSON with:
+- estimated_salary_range: e.g. "₹50L - ₹75L p.a."
+- currency: "INR"
+- experience_level: "entry level", "mid level", "senior"
+- market_trends: Market insight for this role in India
+- negotiation_tips: List of 3-5 negotiation tips
+- job_market_analysis: Paragraph on demand and trends
+
+Respond ONLY with valid JSON.'''
+        
+        response = call_llm(prompt, temperature=0.5)
+        if not response:
+            if benchmark:
+                return {
+                    "estimated_salary_range": f"₹{benchmark['min']/100000:.0f}L - ₹{benchmark['max']/100000:.0f}L p.a.",
+                    "currency": "INR",
+                    "experience_level": benchmark.get("experience", "Not specified"),
+                    "market_trends": f"Strong market demand for {detected_role} in 2025-2026.",
+                    "negotiation_tips": ["Highlight relevant experience", "Research market rates", "Emphasize unique skills"],
+                    "job_market_analysis": "Strong demand in Indian IT market. Remote opportunities available.",
+                    "source": "benchmark"
+                }
+            return {"error": "Failed to estimate salary"}
+        
+        try:
+            if "```json" in response:
+                response = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                response = response.split("```")[1].split("```")[0].strip()
+            result = json.loads(response)
+            result["source"] = "ai_generated"
+        except:
+            result = {"raw_response": response, "source": "raw"}
+        
+        try:
+            save_analysis(user_id=user_id, mode="salary_estimation", result=result, resume_excerpt=resume_text[:500], job_desc_excerpt=job_description[:500])
+        except Exception as e:
+            logger.warning(f"Failed to save salary estimation: {e}")
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Salary estimation task failed: {e}")
+        return {"error": str(e)}
+
+@celery.task(bind=True)
+def generate_career_path_task(self, resume_text, user_id="anonymous"):
+    """
+    Background task: Generate career roadmap based on resume.
+    Uses trimmed resume to reduce tokens and improve speed.
+    """
+    try:
+        trimmed_resume = trim_resume_for_prompt(resume_text, max_length=800)
+        
+        prompt = f'''Analyze the candidate's resume and suggest a long-term career path roadmap.
+
+RESUME (KEY SECTIONS):
+{trimmed_resume}
+
+Return a JSON object with:
+- current_level: Estimated current seniority level (e.g., Junior, Mid, Senior).
+- career_roadmap: A list of 3-4 future roles/milestones. Each milestone should have:
+    - role: Job title.
+    - timeline: Estimated years to reach this.
+    - skills_needed: Key skills to acquire.
+
+Respond ONLY with valid JSON.'''
+        
+        response = call_llm(prompt, temperature=0.7)
+        if not response:
+            return {"error": "Failed to generate career path"}
+        
+        try:
+            if "```json" in response:
+                response = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                response = response.split("```")[1].split("```")[0].strip()
+            result = json.loads(response)
+        except:
+            result = {"raw_response": response}
+        
+        try:
+            save_analysis(user_id=user_id, mode="career_path", result=result, resume_excerpt=resume_text[:500])
+        except Exception as e:
+            logger.warning(f"Failed to save career path: {e}")
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Career path generation task failed: {e}")
+        return {"error": str(e)}
+
+@celery.task(bind=True)
+def tailor_resume_task(self, resume_text, job_description, user_id="anonymous"):
+    """
+    Background task: Tailor resume to job description.
+    Uses trimmed resume to reduce tokens and improve speed.
+    """
+    try:
+        trimmed_resume = trim_resume_for_prompt(resume_text, max_length=800)
+        trimmed_jd = job_description[:800] if job_description else ""
+        
+        prompt = f'''Rewrite the candidate's resume summary and key experience bullet points to better align with the job description keywords and requirements.
+
+RESUME (KEY SECTIONS):
+{trimmed_resume}
+
+JOB DESCRIPTION:
+{trimmed_jd}
+
+Return a JSON object with:
+- rewritten_summary: A new professional summary tailored to the job.
+- tailored_bullets: A list of objects, each containing "original" (text) and "rewritten" (text) for the top 3 most impactful bullet points to change.
+
+Respond ONLY with valid JSON.'''
+        
+        response = call_llm(prompt, temperature=0.7)
+        if not response:
+            return {"error": "Failed to tailor resume"}
+        
+        try:
+            if "```json" in response:
+                response = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                response = response.split("```")[1].split("```")[0].strip()
+            result = json.loads(response)
+        except:
+            result = {"raw_response": response}
+        
+        try:
+            save_analysis(user_id=user_id, mode="tailor_resume", result=result, resume_excerpt=resume_text[:500], job_desc_excerpt=job_description[:500])
+        except Exception as e:
+            logger.warning(f"Failed to save tailor resume: {e}")
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Tailor resume task failed: {e}")
+        return {"error": str(e)}
 
 @app.route('/tasks/<task_id>', methods=['GET'])
 def get_task_status(task_id):
@@ -2151,125 +2393,101 @@ def analyze_mock_interview(user_info):
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def estimate_salary(user_info):
+    """Queue salary estimation as an async task to avoid Gunicorn timeouts."""
     if 'resume' not in request.files:
         return jsonify({'error': 'No resume file provided'}), 400
     
     resume_file = request.files['resume']
     job_description = request.form.get('jobDescription', '')
-    
     resume_text = extract_text_from_pdf(resume_file)
     
-    prompt = f'''
-    Based on the candidate's resume and the job description, estimate a competitive salary range and provide negotiation tips.
-    
-    RESUME:
-    {resume_text[:3000]}
-    
-    JOB DESCRIPTION:
-    {job_description[:3000]}
-    
-    Return a JSON object with:
-    - estimated_salary_range: e.g. "$120,000 - $140,000"
-    - market_trends: Brief insight into current market for this role.
-    - negotiation_tips: List of 3-5 specific tips for negotiating this offer based on the candidate's strengths.
-    '''
-    
-    response = call_llm(prompt, temperature=0.5)
-    if not response:
-        return jsonify({'error': 'Failed to estimate salary'}), 500
-        
+    # Queue as async Celery task (avoids 120s Gunicorn timeout)
     try:
-        if "```json" in response:
-            response = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            response = response.split("```")[1].split("```")[0].strip()
-        result = json.loads(response)
-    except:
-        result = {"raw_response": response}
-        
-    return jsonify(result)
+        task = estimate_salary_task.apply_async(
+            args=[resume_text, job_description, user_info.get("uid", "anonymous")],
+            timeout=90
+        )
+        return jsonify({
+            "status": "queued",
+            "job_id": task.id,
+            "mode": "salary_estimation"
+        }), 202
+    except Exception as e:
+        logger.warning(f"Celery task queue failed: {e}, falling back to sync")
+        # Synchronous fallback for when async unavailable
+        result = estimate_salary_task.apply(
+            args=[resume_text, job_description, user_info.get("uid", "anonymous")]
+        ).get()
+        return jsonify(result)
 
 @app.route('/tailor-resume', methods=['POST'])
 @cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def tailor_resume(user_info):
+    """Queue resume tailoring as async task to avoid Gunicorn timeouts."""
     if 'resume' not in request.files:
         return jsonify({'error': 'No resume file provided'}), 400
     
     resume_file = request.files['resume']
     job_description = request.form.get('jobDescription', '')
-    
     resume_text = extract_text_from_pdf(resume_file)
     
-    prompt = f'''
-    Rewrite the candidate's resume summary and key experience bullet points to better align with the job description keywords and requirements.
+    if not resume_text:
+        return jsonify({'error': 'Failed to extract resume text'}), 400
     
-    RESUME:
-    {resume_text[:3000]}
-    
-    JOB DESCRIPTION:
-    {job_description[:3000]}
-    
-    Return a JSON object with:
-    - rewritten_summary: A new professional summary tailored to the job.
-    - tailored_bullets: A list of objects, each containing "original" (text) and "rewritten" (text) for the top 3 most impactful bullet points to change.
-    '''
-    
-    response = call_llm(prompt, temperature=0.7)
-    if not response:
-        return jsonify({'error': 'Failed to tailor resume'}), 500
-        
+    # Queue as async Celery task
     try:
-        if "```json" in response:
-            response = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            response = response.split("```")[1].split("```")[0].strip()
-        result = json.loads(response)
-    except:
-        result = {"raw_response": response}
-        
-    return jsonify(result)
+        task = tailor_resume_task.apply_async(
+            args=[resume_text, job_description, user_info.get("uid", "anonymous")],
+            timeout=90
+        )
+        return jsonify({
+            "status": "queued",
+            "job_id": task.id,
+            "mode": "tailor_resume"
+        }), 202
+    except Exception as e:
+        logger.warning(f"Celery task queue failed: {e}, falling back to sync")
+        # Synchronous fallback for when async unavailable
+        result = tailor_resume_task.apply(
+            args=[resume_text, job_description, user_info.get("uid", "anonymous")]
+        ).get()
+        return jsonify(result)
 
 @app.route('/generate-career-path', methods=['POST'])
 @cross_origin()
 @auth_required
 @rate_limit(max_requests=10, per_seconds=60)
 def generate_career_path(user_info):
+    """Queue career path generation as async task to avoid Gunicorn timeouts."""
     if 'resume' not in request.files:
         return jsonify({'error': 'No resume file provided'}), 400
     
     resume_file = request.files['resume']
     resume_text = extract_text_from_pdf(resume_file)
     
-    prompt = f'''
-    Analyze the candidate's resume and suggest a long-term career path roadmap.
+    if not resume_text:
+        return jsonify({'error': 'Failed to extract resume text'}), 400
     
-    RESUME:
-    {resume_text[:3000]}
-    
-    Return a JSON object with:
-    - current_level: Estimated current seniority level (e.g., Junior, Mid, Senior).
-    - career_roadmap: A list of 3-4 future roles/milestones. Each milestone should have:
-        - role: Job title.
-        - timeline: Estimated years to reach this.
-        - skills_needed: Key skills to acquire.
-    '''
-    
-    response = call_llm(prompt, temperature=0.7)
-    if not response:
-        return jsonify({'error': 'Failed to generate career path'}), 500
-        
+    # Queue as async Celery task
     try:
-        if "```json" in response:
-            response = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            response = response.split("```")[1].split("```")[0].strip()
-        result = json.loads(response)
-    except:
-        result = {"raw_response": response}
-        
-    return jsonify(result)
+        task = generate_career_path_task.apply_async(
+            args=[resume_text, user_info.get("uid", "anonymous")],
+            timeout=90
+        )
+        return jsonify({
+            "status": "queued",
+            "job_id": task.id,
+            "mode": "career_path"
+        }), 202
+    except Exception as e:
+        logger.warning(f"Celery task queue failed: {e}, falling back to sync")
+        # Synchronous fallback for when async unavailable
+        result = generate_career_path_task.apply(
+            args=[resume_text, user_info.get("uid", "anonymous")]
+        ).get()
+        return jsonify(result)
 
 @app.route('/generate-job-description', methods=['POST'])
 @cross_origin()
