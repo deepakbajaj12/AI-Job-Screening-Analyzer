@@ -85,6 +85,22 @@ async function pollJob(jobId: string, maxWaitMs = 300000, initialDelayMs = 1000)
         const data = await res.json()
         if (data.status === 'finished' || data.status === 'completed') return data.result
         if (data.status === 'failed') throw new Error(data.error || 'Analysis failed')
+        if (data.status === 'queued' || data.status === 'started') {
+          // /analyze uses async queueing; if /status is stale, try Celery task status path too.
+          try {
+            const taskRes = await fetch(`${API_BASE}/tasks/${jobId}`)
+            if (taskRes.ok) {
+              const taskData = await taskRes.json()
+              const state = String(taskData.state || '').toUpperCase()
+              if (state === 'SUCCESS') return taskData.result
+              if (state === 'FAILURE' || state === 'REVOKED') {
+                throw new Error(taskData.error || 'Analysis failed')
+              }
+            }
+          } catch {
+            // Ignore fallback polling errors and continue normal polling loop.
+          }
+        }
         if (data.status === 'unknown') {
           // Job was cleaned up from Redis - this is normal for completed jobs
           if (data.result) return data.result
