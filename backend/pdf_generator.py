@@ -624,6 +624,14 @@ def generate_coaching_report_pdf(coaching_data, mode='progress'):
     
     story = []
     
+    # Extract latest version if data contains versions array
+    if isinstance(coaching_data, dict) and 'versions' in coaching_data:
+        versions = coaching_data.get('versions', [])
+        if versions:
+            coaching_data = versions[-1]  # Use latest version
+        else:
+            coaching_data = {}
+    
     # Title
     titles = {
         'progress': '📊 Coaching Progress Report',
@@ -634,20 +642,19 @@ def generate_coaching_report_pdf(coaching_data, mode='progress'):
     story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
     story.append(Spacer(1, 0.2*inch))
     
-    # Progress Section
-    if mode == 'progress' and coaching_data.get('overallProgress'):
-        story.append(Paragraph("Overall Progress", heading_style))
-        progress_data = [
-            ['Category', 'Progress'],
-            ['Overall', f"{coaching_data.get('overallProgress', 0)}%"],
+    # Progress Section - Show metrics from latest version
+    if mode == 'progress':
+        story.append(Paragraph("Version Metrics", heading_style))
+        metrics_data = [
+            ['Metric', 'Value'],
+            ['Word Count', str(coaching_data.get('wordCount', 'N/A'))],
+            ['Bullet Points', str(coaching_data.get('bulletCount', 'N/A'))],
+            ['Skills Found', str(coaching_data.get('skillCount', 'N/A'))],
+            ['Skill Coverage', f"{coaching_data.get('skillCoverageRatio', 0) * 100:.1f}%"],
         ]
         
-        if coaching_data.get('categories'):
-            for cat, val in coaching_data['categories'].items():
-                progress_data.append([cat.title(), f"{val}%"])
-        
-        progress_table = Table(progress_data, colWidths=[3*inch, 2*inch])
-        progress_table.setStyle(TableStyle([
+        metrics_table = Table(metrics_data, colWidths=[3*inch, 2*inch])
+        metrics_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -658,34 +665,83 @@ def generate_coaching_report_pdf(coaching_data, mode='progress'):
             ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#d1d5db')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9fafb')]),
         ]))
-        story.append(progress_table)
+        story.append(metrics_table)
         story.append(Spacer(1, 0.2*inch))
+        
+        # Skills section
+        if coaching_data.get('skills'):
+            story.append(Paragraph("Skills Found", heading_style))
+            skills = coaching_data.get('skills', [])
+            for skill in skills[:20]:  # Limit to 20 for readability
+                story.append(Paragraph(f"• {skill}", normal_style))
+            story.append(Spacer(1, 0.15*inch))
     
     # Study Pack Resources
-    if mode == 'study_pack':
+    elif mode == 'study_pack':
         if coaching_data.get('skillGaps'):
             story.append(Paragraph("Skill Gaps to Address", heading_style))
-            for gap in coaching_data['skillGaps']:
+            gaps = coaching_data.get('skillGaps', [])
+            gap_data = [['Skill', 'Priority']]
+            
+            for gap in gaps:
                 if isinstance(gap, dict):
-                    story.append(Paragraph(f"<b>{gap.get('skill', '')}:</b> {gap.get('description', '')}", normal_style))
+                    skill = gap.get('skill', gap.get('name', 'Unknown'))
+                    priority = gap.get('priority', 'Medium')
+                    gap_data.append([skill, priority])
                 else:
-                    story.append(Paragraph(f"• {gap}", normal_style))
-            story.append(Spacer(1, 0.15*inch))
+                    gap_data.append([str(gap), 'Medium'])
+            
+            gap_table = Table(gap_data, colWidths=[3*inch, 2*inch])
+            gap_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ef4444')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#fef2f2')),
+                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#fca5a5')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fee2e2')]),
+            ]))
+            story.append(gap_table)
+            story.append(Spacer(1, 0.2*inch))
         
         if coaching_data.get('studyPack'):
             story.append(PageBreak())
             story.append(Paragraph("Recommended Resources", heading_style))
-            for resource in coaching_data['studyPack']:
+            resources = coaching_data.get('studyPack', [])
+            
+            resource_data = [['Resource', 'Duration']]
+            for resource in resources:
                 if isinstance(resource, dict):
-                    title = resource.get('title', '')
-                    desc = resource.get('description', '')
-                    url = resource.get('url', '')
-                    story.append(Paragraph(f"<b>{title}</b>: {desc}", normal_style))
-                    if url:
-                        story.append(Paragraph(f"<font color='blue'><u>{url}</u></font>", styles['Normal']))
+                    title = resource.get('title', resource.get('name', ''))
+                    duration = resource.get('duration', 'Self-paced')
+                    source = resource.get('source', '')
+                    if title:
+                        display_title = f"{title} ({source})" if source else title
+                        resource_data.append([display_title, duration])
                 else:
-                    story.append(Paragraph(f"• {resource}", normal_style))
-                story.append(Spacer(1, 0.08*inch))
+                    resource_data.append([str(resource), 'Self-paced'])
+            
+            if len(resource_data) > 1:  # Only show if there are resources
+                resource_table = Table(resource_data, colWidths=[3.5*inch, 1.5*inch])
+                resource_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#10b981')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 11),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f0fdf4')),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#86efac')),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0fdf4')]),
+                ]))
+                story.append(resource_table)
+    
+    # Add footer
+    story.append(Spacer(1, 0.3*inch))
+    footer_text = f"<i>Generated on {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</i>"
+    story.append(Paragraph(footer_text, styles['Normal']))
     
     # Build PDF
     doc.build(story)
