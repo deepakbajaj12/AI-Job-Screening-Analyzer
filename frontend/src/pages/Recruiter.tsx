@@ -183,6 +183,7 @@ export default function Recruiter() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null); setResult(null)
+    if (!token) { setError('Please log in to use Recruiter Tools'); return }
     if (!resume || !jd || !email) { setError('Provide resume, JD PDF and recruiter email'); return }
     setLoading(true)
     try {
@@ -196,6 +197,7 @@ export default function Recruiter() {
   }
 
   const handleDownloadAnalysisPdf = async () => {
+    if (!token) { setError('Please log in to download PDF'); return }
     if (!result) return
     setDownloadingPdf(true)
     try {
@@ -208,6 +210,7 @@ export default function Recruiter() {
   }
 
   const handleGenerateEmail = async () => {
+    if (!token) { setError('Please log in to generate emails'); return }
     setLoading(true)
     try {
       const data = await generateEmail(token, { type: emailType, candidateName, jobTitle })
@@ -221,6 +224,7 @@ export default function Recruiter() {
   }
 
   const handleGenerateJD = async () => {
+    if (!token) { setError('Please log in to generate job descriptions'); return }
     setLoading(true)
     try {
       const data = await generateJobDescription(token, { title: jdTitle, skills: jdSkills, experience: jdExperience })
@@ -234,6 +238,7 @@ export default function Recruiter() {
   }
 
   const handleGenerateSearch = async () => {
+    if (!token) { setError('Please log in to generate searches'); return }
     if (!searchJD.trim()) return
     setLoading(true)
     try {
@@ -247,6 +252,7 @@ export default function Recruiter() {
   }
 
   const handleSaveEmailTemplate = async () => {
+    if (!token) { setError('Please log in to save templates'); return }
     if (!generatedEmail) return
     setLoading(true)
     setError(null)
@@ -271,6 +277,7 @@ export default function Recruiter() {
   }
 
   const handleSaveJdTemplate = async () => {
+    if (!token) { setError('Please log in to save templates'); return }
     if (!generatedJdForSave) return
     setLoading(true)
     setError(null)

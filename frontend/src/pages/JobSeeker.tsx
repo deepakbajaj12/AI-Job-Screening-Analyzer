@@ -24,6 +24,8 @@ export default function JobSeeker() {
   const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking') => {
     setError(null); setResult(null); setActiveTab(action)
     
+    if (!token) { setError('Please log in to use Job Seeker tools'); return }
+    
     if (action === 'networking') {
       // No resume needed for networking, but we need form inputs
       return
@@ -90,6 +92,7 @@ export default function JobSeeker() {
   }
 
   const handleNetworkingSubmit = async () => {
+    if (!token) { setError('Please log in to generate networking messages'); return }
     if (!netRole || !netCompany) { setError('Please provide target role and company'); return }
     setLoading(true)
     try {
