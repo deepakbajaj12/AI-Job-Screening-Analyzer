@@ -71,21 +71,39 @@ async function fetchJsonWithRetry(
 }
 
 
-async function pollJob(jobId: string) {
+async function pollJob(jobId: string, maxWaitMs = 300000, initialDelayMs = 1000) {
   let attempts = 0
-  const maxAttempts = 120 
-  while (attempts < maxAttempts) {
-    await new Promise(r => setTimeout(r, 2000))
-    const res = await fetch(`${API_BASE}/status/${jobId}`)
-    if (res.ok) {
-       const data = await res.json()
-       if (data.status === 'finished') return data.result
-       if (data.status === 'failed') throw new Error(data.error || 'Analysis failed')
-       // If status is "queued" or "started", we keep waiting
+  let delayMs = initialDelayMs
+  const startTime = Date.now()
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(r => setTimeout(r, delayMs))
+    
+    try {
+      const res = await fetch(`${API_BASE}/status/${jobId}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.status === 'finished' || data.status === 'completed') return data.result
+        if (data.status === 'failed') throw new Error(data.error || 'Analysis failed')
+        // If status is "queued" or "started", we keep waiting
+      } else if (res.status === 404) {
+        throw new Error('Job not found')
+      }
+    } catch (error: any) {
+      // Network error, retry with exponential backoff
+      if (error.message.includes('fetch')) {
+        // Continue polling on network errors
+      } else {
+        throw error
+      }
     }
+    
+    // Exponential backoff: cap at 5 seconds between attempts
+    delayMs = Math.min(delayMs * 1.5, 5000)
     attempts++
   }
-  throw new Error('Analysis timed out')
+  
+  throw new Error(`Analysis timed out after ${maxWaitMs / 1000}s. Please check back later.`)
 }
 
 export async function analyzeJobSeeker(token: string | null, payload: { resume: File, jobDescription: string }) {

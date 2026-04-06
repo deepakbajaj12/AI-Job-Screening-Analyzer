@@ -1213,14 +1213,13 @@ def auth_required(fn):
             return app.make_default_options_response()
 
         if config.DEV_BYPASS_AUTH:
-            # Inject mock user
+            # Inject mock user only in dev mode
             return fn({"uid": "dev-user", "email": "dev@local"}, *args, **kwargs)
             
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            # Auto-bypass for public demo (even if config is somehow false)
-            # This ensures visitors don't face 401 errors
-            return fn({"uid": "guest-user", "email": "guest@demo.local"}, *args, **kwargs)
+            # Return 401 Unauthorized for missing bearer token on protected endpoints
+            return jsonify({"error": "Authorization header with Bearer token is required"}), 401
 
         id_token = auth_header.split("Bearer ")[1]
         user_info = verify_firebase_token(id_token)
@@ -1756,8 +1755,8 @@ def analyze(user_info):
             return jsonify({"error": "Invalid mode; must be 'jobSeeker' or 'recruiter'"}), 400
         
         resume_text = data.get("resume", "")
-        if not resume_text:
-             return jsonify({"error": "Resume text is required"}), 400
+        if not resume_text or len(resume_text.strip()) < 40:
+             return jsonify({"error": "Resume text is required and must be at least 40 characters"}), 400
         
         # Limit resume length same as file extraction
         resume_text = resume_text[:3000]
