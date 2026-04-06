@@ -759,3 +759,179 @@ pre {
 
 /* End of styles */
 /* force build trigger */
+
+/* Diff Component Styles */
+.diff-container {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.diff-section {
+  background: var(--card-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.diff-section:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+.diff-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diff-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Skills Changes */
+.skills-change {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.skills-change:last-child {
+  margin-bottom: 0;
+}
+
+.skills-change strong {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: var(--fg);
+  font-size: 0.875rem;
+}
+
+.skills-change.added strong {
+  color: var(--success);
+}
+
+.skills-change.removed strong {
+  color: var(--danger);
+}
+
+.skills-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-tag-added,
+.skill-tag-removed {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.skill-tag-added {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--success);
+}
+
+.skill-tag-removed {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--danger);
+}
+
+/* Metrics Table */
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.diff-table thead {
+  background: var(--bg);
+}
+
+.diff-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 2px solid var(--border);
+}
+
+.diff-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+}
+
+.diff-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.diff-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.diff-table td:nth-child(2),
+.diff-table td:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-table td:nth-child(4) {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-table .positive {
+  color: var(--success);
+}
+
+.diff-table .negative {
+  color: var(--danger);
+}
+
+/* Summary Section */
+.diff-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 16px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-item span {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.summary-item strong {
+  color: var(--accent);
+  font-weight: 600;
+}

@@ -253,7 +253,112 @@ export default function Coaching() {
       <div className="card">
         <h3>Diff (Last Two Versions)</h3>
         <button className="btn" onClick={computeDiff} disabled={!progress || !token}>Compute Diff</button>
-        {diffData && <pre>{JSON.stringify(diffData, null, 2)}</pre>}
+        {diffData && (
+          <div className="diff-container">
+            <div className="diff-section">
+              <h4>📊 Version Comparison</h4>
+              <p className="diff-meta">Version {diffData.prevVersion} → Version {diffData.currVersion}</p>
+            </div>
+
+            {/* Skills Changes */}
+            {(diffData.addedSkills?.length > 0 || diffData.removedSkills?.length > 0) && (
+              <div className="diff-section">
+                <h4>🎯 Skills Changes</h4>
+                {diffData.addedSkills?.length > 0 && (
+                  <div className="skills-change added">
+                    <strong>✅ Added Skills ({diffData.addedSkills.length})</strong>
+                    <div className="skills-list">
+                      {diffData.addedSkills.map((skill: string, i: number) => (
+                        <span key={i} className="skill-tag-added">{skill}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {diffData.removedSkills?.length > 0 && (
+                  <div className="skills-change removed">
+                    <strong>❌ Removed Skills ({diffData.removedSkills.length})</strong>
+                    <div className="skills-list">
+                      {diffData.removedSkills.map((skill: string, i: number) => (
+                        <span key={i} className="skill-tag-removed">{skill}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Metrics Changes */}
+            {diffData.metricDeltas && (
+              <div className="diff-section">
+                <h4>📈 Metrics Comparison</h4>
+                <table className="diff-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Version {diffData.prevVersion}</th>
+                      <th>Version {diffData.currVersion}</th>
+                      <th>Change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diffData.currMetrics && (
+                      <>
+                        <tr>
+                          <td>Word Count</td>
+                          <td>{diffData.prevMetrics?.wordCount || 0}</td>
+                          <td>{diffData.currMetrics.wordCount}</td>
+                          <td className={diffData.metricDeltas.wordCount >= 0 ? 'positive' : 'negative'}>
+                            {diffData.metricDeltas.wordCount > 0 ? '+' : ''}{diffData.metricDeltas.wordCount}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Bullet Points</td>
+                          <td>{diffData.prevMetrics?.bulletCount || 0}</td>
+                          <td>{diffData.currMetrics.bulletCount}</td>
+                          <td className={diffData.metricDeltas.bulletCount >= 0 ? 'positive' : 'negative'}>
+                            {diffData.metricDeltas.bulletCount > 0 ? '+' : ''}{diffData.metricDeltas.bulletCount}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Skills Found</td>
+                          <td>{diffData.prevMetrics?.skillCount || 0}</td>
+                          <td>{diffData.currMetrics.skillCount}</td>
+                          <td className={diffData.metricDeltas.skillCount >= 0 ? 'positive' : 'negative'}>
+                            {diffData.metricDeltas.skillCount > 0 ? '+' : ''}{diffData.metricDeltas.skillCount}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Skill Coverage</td>
+                          <td>{((diffData.prevMetrics?.skillCoverageRatio || 0) * 100).toFixed(1)}%</td>
+                          <td>{(diffData.currMetrics.skillCoverageRatio * 100).toFixed(1)}%</td>
+                          <td className={diffData.metricDeltas.skillCoverageRatio >= 0 ? 'positive' : 'negative'}>
+                            {diffData.metricDeltas.skillCoverageRatio > 0 ? '+' : ''}{(diffData.metricDeltas.skillCoverageRatio * 100).toFixed(1)}%
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Avg Bullet Word Count</td>
+                          <td>{diffData.prevMetrics?.avgBulletWordCount?.toFixed(2) || '0.00'}</td>
+                          <td>{diffData.currMetrics.avgBulletWordCount.toFixed(2)}</td>
+                          <td className={diffData.metricDeltas.avgBulletWordCount >= 0 ? 'positive' : 'negative'}>
+                            {diffData.metricDeltas.avgBulletWordCount > 0 ? '+' : ''}{diffData.metricDeltas.avgBulletWordCount.toFixed(2)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Summary */}
+            <div className="diff-summary">
+              <div className="summary-item">
+                <span>Total Changes:</span>
+                <strong>{(diffData.addedSkills?.length || 0) + (diffData.removedSkills?.length || 0) + Object.keys(diffData.metricDeltas || {}).length} updates</strong>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && <div className="error">{error}</div>}
