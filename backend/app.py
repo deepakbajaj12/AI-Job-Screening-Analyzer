@@ -200,6 +200,14 @@ LLM_MODEL = config.LLM_MODEL  # e.g. cohere:command-light-nightly or openai:gpt-
 cohere_client = cohere.Client(COHERE_API_KEY) if COHERE_API_KEY else None
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if (OPENAI_API_KEY and OpenAI) else None
 
+# Log which LLM provider is configured
+if cohere_client:
+    logger.info(f"llm.cohere_configured model={LLM_MODEL}")
+elif openai_client:
+    logger.info(f"llm.openai_configured model={LLM_MODEL}")
+else:
+    logger.warning(f"llm.no_provider_configured falling_back_to_mock model={LLM_MODEL}")
+
 # =============================
 # Data Persistence (Coaching)
 # =============================
@@ -647,8 +655,9 @@ def call_llm(prompt, temperature=0.6):
                         temperature=temperature
                     )
                     result = resp.text.strip()
+                    logger.info(f"llm.cohere_success model={model}")
                 except Exception as llm_err:
-                    logger.error(f"CoHere API call failed: {llm_err}")
+                    logger.error(f"CoHere API call failed: {llm_err} provider={provider} model={model}")
                     result = _get_mock_response(prompt)
         elif provider == "openai":
             if not openai_client:
