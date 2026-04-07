@@ -705,7 +705,13 @@ def call_llm(prompt, temperature=0.6):
         return None
 
     # 2. Write to Cache (TTL 24h)
-    if result and redis_client and cache_key:
+    # Important: Do not cache mock responses
+    is_mock = response and (
+        "mock response" in response.lower() or 
+        ("Mock" in response and "Headline" in response)
+    )
+    
+    if result and not is_mock and redis_client and cache_key:
         try:
             redis_client.setex(cache_key, 86400, result)
         except Exception as e:
