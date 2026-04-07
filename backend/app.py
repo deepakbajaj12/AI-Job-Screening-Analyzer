@@ -659,34 +659,33 @@ def call_llm(prompt, temperature=0.6):
                 logger.warning("llm.cohere_not_configured")
                 result = _get_mock_response(prompt)
             else:
-                try:
-                    # Run provider call in a bounded-time future so a stalled upstream
-                    # request cannot block the single-worker queue forever.
-                    def _cohere_chat_once():
-                        return cohere_client.chat(
-                            model=model,
-                            message=prompt,
-                            temperature=temperature
-                        )
-                        
-                    # We avoid using context managers with wait=True because it blocks the single Gunicorn worker
-                    # catching signals when timeout hits. Instead, we use wait=False.
-                    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-                    fut = executor.submit(_cohere_chat_once)
+                # Run provider call in a bounded-time future so a stalled upstream
+                # request cannot block the single-worker queue forever.
+                def _cohere_chat_once():
+                    return cohere_client.chat(
+                        model=model,
+                        message=prompt,
+                        temperature=temperature
+                    )
                     
-                    try:
-                        resp = fut.result(timeout=LLM_TIMEOUT_SECONDS)
-                        result = resp.text.strip()
-                        logger.info(f"llm.cohere_success model={model}")
-                    except concurrent.futures.TimeoutError:
-                        logger.error(f"CoHere API timeout after {LLM_TIMEOUT_SECONDS}s provider={provider} model={model}")
-                        result = _get_mock_response(prompt)
-                    except Exception as llm_err:
-                        logger.error(f"CoHere API call failed: {llm_err} provider={provider} model={model}")
-                        result = _get_mock_response(prompt)
-                    finally:
-                        # Do not block thread shutdown when leaving this block
-                        executor.shutdown(wait=False)
+                # We avoid using context managers with wait=True because it blocks the single Gunicorn worker
+                # catching signals when timeout hits. Instead, we use wait=False.
+                executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                fut = executor.submit(_cohere_chat_once)
+                
+                try:
+                    resp = fut.result(timeout=LLM_TIMEOUT_SECONDS)
+                    result = resp.text.strip()
+                    logger.info(f"llm.cohere_success model={model}")
+                except concurrent.futures.TimeoutError:
+                    logger.error(f"CoHere API timeout after {LLM_TIMEOUT_SECONDS}s provider={provider} model={model}")
+                    result = _get_mock_response(prompt)
+                except Exception as llm_err:
+                    logger.error(f"CoHere API call failed: {llm_err} provider={provider} model={model}")
+                    result = _get_mock_response(prompt)
+                finally:
+                    # Do not block thread shutdown when leaving this block
+                    executor.shutdown(wait=False)
                         
         elif provider == "openai":
             if not openai_client:
@@ -713,9 +712,9 @@ def call_llm(prompt, temperature=0.6):
 
     # 2. Write to Cache (TTL 24h)
     # Important: Do not cache mock responses
-    is_mock = response and (
-        "mock response" in response.lower() or 
-        ("Mock" in response and "Headline" in response)
+    is_mock = result and (
+        "mock response" in result.lower() or 
+        ("Mock" in result and "Headline" in result)
     )
     
     if result and not is_mock and redis_client and cache_key:
