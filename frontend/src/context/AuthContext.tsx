@@ -136,6 +136,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub()
   }, [])
 
+  useEffect(() => {
+    if (import.meta.env.VITE_DEV_BYPASS === '1') return
+    ensureFirebase()
+    if (!auth) return
+
+    // Keep token fresh for long-lived sessions to avoid 401/expired-token failures.
+    const timer = setInterval(async () => {
+      const current = auth?.currentUser
+      if (!current) return
+      try {
+        const fresh = await current.getIdToken(true)
+        setToken(fresh)
+      } catch (err) {
+        console.warn('Token refresh failed:', err)
+      }
+    }, 10 * 60 * 1000)
+
+    return () => clearInterval(timer)
+  }, [])
+
   const value = useMemo<Ctx>(() => ({
     user,
     token,
