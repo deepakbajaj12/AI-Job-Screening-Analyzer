@@ -22,7 +22,7 @@ class Config:
 
     COHERE_API_KEY: str | None = os.getenv("COHERE_API_KEY")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "cohere:command-r-08-2024")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "cohere:command-r-plus")
     LLM_TIMEOUT_SECONDS: int = int(os.getenv("LLM_TIMEOUT_SECONDS", "35"))
     ASYNC_TASKS_ENABLED: bool = os.getenv("ASYNC_TASKS_ENABLED", "0").lower() in ("1", "true", "yes")
 
