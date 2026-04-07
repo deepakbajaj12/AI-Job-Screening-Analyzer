@@ -1815,6 +1815,7 @@ def analyze(user_info):
 
     # Try async queue first, fall back to synchronous execution
     try:
+        raise Exception('Forcing synchronous execution')
         try:
             from backend.queue_config import task_queue
             from backend.worker_tasks import process_resume_analysis
@@ -2489,6 +2490,7 @@ def estimate_salary(user_info):
     
     # Queue as async Celery task (avoids 120s Gunicorn timeout)
     try:
+        raise Exception('Forcing synchronous execution')
         task = estimate_salary_task.apply_async(
             args=[resume_text, job_description, user_info.get("uid", "anonymous")],
             timeout=300
@@ -2524,6 +2526,7 @@ def tailor_resume(user_info):
     
     # Queue as async Celery task
     try:
+        raise Exception('Forcing synchronous execution')
         task = tailor_resume_task.apply_async(
             args=[resume_text, job_description, user_info.get("uid", "anonymous")],
             timeout=300
@@ -2558,6 +2561,7 @@ def generate_career_path(user_info):
     
     # Queue as async Celery task
     try:
+        raise Exception('Forcing synchronous execution')
         task = generate_career_path_task.apply_async(
             args=[resume_text, user_info.get("uid", "anonymous")],
             timeout=300
