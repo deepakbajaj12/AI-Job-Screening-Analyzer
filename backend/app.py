@@ -571,6 +571,13 @@ def _get_mock_response(prompt):
     """Generate a mock response when LLM is unavailable."""
     prompt_lower = prompt.lower()
     
+    if "linkedin" in prompt_lower:
+        return json.dumps({
+            "headline": "Mock LinkedIn Headline | Software Developer",
+            "about": "This is a mock LinkedIn summary generated because the LLM API key is missing or invalid. I am an experienced developer with a passion for building great software.",
+            "experience_highlights": ["Developed a mock feature", "Improved mock performance by 20%", "Collaborated with a mock team"]
+        })
+
     if "json" in prompt_lower:
         return json.dumps({
             "strengths": ["Strong Technical Background", "Good Communication", "Problem Solving"],
