@@ -668,19 +668,26 @@ def call_llm(prompt, temperature=0.6):
                             message=prompt,
                             temperature=temperature
                         )
-
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        fut = executor.submit(_cohere_chat_once)
+                        
+                    # We avoid using context managers with wait=True because it blocks the single Gunicorn worker
+                    # catching signals when timeout hits. Instead, we use wait=False.
+                    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                    fut = executor.submit(_cohere_chat_once)
+                    
+                    try:
                         resp = fut.result(timeout=LLM_TIMEOUT_SECONDS)
-
-                    result = resp.text.strip()
-                    logger.info(f"llm.cohere_success model={model}")
-                except concurrent.futures.TimeoutError:
-                    logger.error(f"CoHere API timeout after {LLM_TIMEOUT_SECONDS}s provider={provider} model={model}")
-                    result = _get_mock_response(prompt)
-                except Exception as llm_err:
-                    logger.error(f"CoHere API call failed: {llm_err} provider={provider} model={model}")
-                    result = _get_mock_response(prompt)
+                        result = resp.text.strip()
+                        logger.info(f"llm.cohere_success model={model}")
+                    except concurrent.futures.TimeoutError:
+                        logger.error(f"CoHere API timeout after {LLM_TIMEOUT_SECONDS}s provider={provider} model={model}")
+                        result = _get_mock_response(prompt)
+                    except Exception as llm_err:
+                        logger.error(f"CoHere API call failed: {llm_err} provider={provider} model={model}")
+                        result = _get_mock_response(prompt)
+                    finally:
+                        # Do not block thread shutdown when leaving this block
+                        executor.shutdown(wait=False)
+                        
         elif provider == "openai":
             if not openai_client:
                 logger.warning("llm.openai_not_configured")
