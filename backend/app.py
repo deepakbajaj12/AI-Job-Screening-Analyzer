@@ -1614,15 +1614,16 @@ RESUME (KEY SECTIONS):
 JOB DESCRIPTION:
 {trimmed_jd}
 
-Return JSON with:
-- estimated_salary_range: e.g. "₹50L - ₹75L p.a."
-- currency: "INR"
-- experience_level: "entry level", "mid level", "senior"
-- market_trends: Market insight for this role in India
-- negotiation_tips: List of 3-5 negotiation tips
-- job_market_analysis: Paragraph on demand and trends
+You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
 
-Respond ONLY with valid JSON.'''
+{{
+    "estimated_salary_range": "string (e.g. ₹50L - ₹75L p.a.)",
+    "currency": "INR",
+    "experience_level": "string",
+    "market_trends": "string",
+    "negotiation_tips": ["string", "string", "string"],
+    "job_market_analysis": "string"
+}}'''
         
         response = call_llm(prompt, temperature=0.5)
         if not response:
@@ -1673,14 +1674,18 @@ def generate_career_path_task(self, resume_text, user_id="anonymous"):
 RESUME (KEY SECTIONS):
 {trimmed_resume}
 
-Return a JSON object with:
-- current_level: Estimated current seniority level (e.g., Junior, Mid, Senior).
-- career_roadmap: A list of 3-4 future roles/milestones. Each milestone should have:
-    - role: Job title.
-    - timeline: Estimated years to reach this.
-    - skills_needed: Key skills to acquire.
+You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
 
-Respond ONLY with valid JSON.'''
+{{
+    "current_level": "string (e.g., Junior, Mid, Senior)",
+    "career_roadmap": [
+        {{
+            "role": "string (Job title)",
+            "timeline": "string (Estimated years to reach this)",
+            "skills_needed": "string (Key skills to acquire)"
+        }}
+    ]
+}}'''
         
         response = call_llm(prompt, temperature=0.7)
         if not response:
@@ -1724,11 +1729,17 @@ RESUME (KEY SECTIONS):
 JOB DESCRIPTION:
 {trimmed_jd}
 
-Return a JSON object with:
-- rewritten_summary: A new professional summary tailored to the job.
-- tailored_bullets: A list of objects, each containing "original" (text) and "rewritten" (text) for the top 3 most impactful bullet points to change.
+You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
 
-Respond ONLY with valid JSON.'''
+{{
+    "rewritten_summary": "string (A professional summary tailored to the job)",
+    "tailored_bullets": [
+        {{
+            "original": "string (The original text)",
+            "rewritten": "string (The improved text aligning with the job description)"
+        }}
+    ]
+}}'''
         
         response = call_llm(prompt, temperature=0.7)
         if not response:
@@ -2459,10 +2470,13 @@ def generate_linkedin_profile(user_info):
         RESUME:
         {resume_text[:3000]}
         
-        Return a VALID JSON object with:
-        - headline: A catchy professional headline.
-        - about: A compelling "About" summary (max 300 words).
-        - experience_highlights: A list of string bullet points for key achievements.
+        You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
+
+        {{
+            "headline": "string (A catchy professional headline)",
+            "about": "string (A compelling About summary)",
+            "experience_highlights": ["string"]
+        }}
         '''
         
         response = call_llm(prompt, temperature=0.7)
@@ -2508,11 +2522,14 @@ def analyze_mock_interview(user_info):
     TRANSCRIPT:
     {transcript}
     
-    Provide a JSON report with:
-    - score: A score out of 100.
-    - feedback: General feedback on communication and technical accuracy.
-    - strengths: List of strong points.
-    - improvements: List of areas to improve.
+    You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
+
+    {{
+        "score": number (0-100),
+        "feedback": "string",
+        "strengths": ["string"],
+        "improvements": ["string"]
+    }}
     '''
     
     response = call_llm(prompt, temperature=0.5)
@@ -2786,14 +2803,20 @@ def resume_health_check(user_info):
     RESUME TEXT:
     {text[:4000]}
     
-    Return a JSON object with:
-    - score: Overall health score (0-100).
-    - summary: A brief summary of the resume's health.
-    - checks: A list of objects, each with:
-        - category: (e.g., "Impact", "Formatting", "Action Verbs")
-        - status: "pass", "warning", or "fail"
-        - feedback: Specific feedback for this category.
-    - improvements: A list of specific actionable improvements.
+    You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
+
+    {{
+        "score": number (0-100),
+        "summary": "string",
+        "checks": [
+            {{
+                "category": "string (e.g., Impact, Formatting, Action Verbs)",
+                "status": "string (pass, warning, or fail)",
+                "feedback": "string"
+            }}
+        ],
+        "improvements": ["string"]
+    }}
     '''
     
     response = call_llm(prompt, temperature=0.5)
@@ -2826,9 +2849,12 @@ def generate_boolean_search(user_info):
     JOB DESCRIPTION:
     {job_description[:3000]}
     
-    Return a JSON object with:
-    - boolean_string: The search string (e.g., "(Java OR Kotlin) AND (Android) AND (Senior OR Lead)").
-    - explanation: Why these keywords and operators were chosen.
+    You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
+
+    {{
+        "boolean_string": "string (e.g., (Java OR Kotlin) AND (Android) AND (Senior OR Lead))",
+        "explanation": "string (Why these keywords and operators were chosen)"
+    }}
     '''
     
     response = call_llm(prompt, temperature=0.4)
@@ -2871,10 +2897,13 @@ def generate_networking_message(user_info):
         - cold_email: Professional, concise, highlighting value proposition.
         - alumni_reachout: Friendly, mentioning shared alma mater/background.
         
-        Return a JSON object with:
-        - subject: (If applicable, otherwise empty)
-        - message: The message body.
-        - tips: 1-2 quick tips for sending this message.
+        You MUST return the output as a valid and strict JSON object using the exact schema below. Do not include any markdown formatting, preamble, or conversational text.
+
+        {{
+            "subject": "string (If applicable, otherwise empty)",
+            "message": "string (The message body)",
+            "tips": ["string"]
+        }}
         '''
         
         response = call_llm(prompt, temperature=0.6)
