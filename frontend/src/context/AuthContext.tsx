@@ -1,11 +1,11 @@
 // AUTHENTICATION CONTEXT: Firebase authentication state management (login/logout/user info) accessible across all components
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { initializeApp } from 'firebase/app'
 import {
   ConfirmationResult,
   getAuth,
   GoogleAuthProvider,
-  onAuthStateChanged,
+  onIdTokenChanged,
   RecaptchaVerifier,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
@@ -80,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [phoneConfirmation, setPhoneConfirmation] = useState<ConfirmationResult | null>(null)
+  const welcomedUidRef = useRef<string | null>(null)
 
   const ensureRecaptcha = () => {
     ensureFirebase()
@@ -104,10 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!auth) {
       return
     }
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const unsub = onIdTokenChanged(auth, async (u) => {
       if (!u) {
         setUser(null)
         setToken(null)
+        welcomedUidRef.current = null
         return
       }
 
@@ -115,17 +117,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser({ uid: u.uid, email: u.email, phoneNumber: u.phoneNumber })
       setToken(idToken)
 
-      try {
-        const welcome = await postLoginWelcome(idToken, {
-          email: u.email,
-          displayName: u.displayName,
-          phoneNumber: u.phoneNumber
-        })
-        if (welcome.welcomeEmailSent && u.email) {
-          setAuthMessage(`Welcome email sent to ${u.email}`)
+      if (welcomedUidRef.current !== u.uid) {
+        try {
+          const welcome = await postLoginWelcome(idToken, {
+            email: u.email,
+            displayName: u.displayName,
+            phoneNumber: u.phoneNumber
+          })
+          if (welcome.welcomeEmailSent && u.email) {
+            setAuthMessage(`Welcome email sent to ${u.email}`)
+          }
+          welcomedUidRef.current = u.uid
+        } catch (err) {
+          console.warn('Post-login welcome notification failed:', err)
         }
-      } catch (err) {
-        console.warn('Post-login welcome notification failed:', err)
       }
     })
     return () => unsub()
