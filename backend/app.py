@@ -159,6 +159,7 @@ APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
 DEV_BYPASS_AUTH = config.DEV_BYPASS_AUTH
 START_TIME = time.time()
 _metrics = {'requests': 0, 'analyze': {'count': 0, 'avgMs': 0.0}, 'errors': 0}
+BUILD_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
 
 # Initialize Firebase Admin SDK
 firebase_cred_path = config.FIREBASE_CREDENTIAL_PATH
@@ -1291,12 +1292,13 @@ def health():
     return jsonify({
         'status': 'ok',
         'version': APP_VERSION,
+        'commit': BUILD_COMMIT,
         'time': datetime.utcnow().isoformat() + 'Z'
     })
 
 @app.route('/version', methods=['GET'])
 def version():
-    return jsonify({'version': APP_VERSION})
+    return jsonify({'version': APP_VERSION, 'commit': BUILD_COMMIT})
 
 @app.route('/auth/post-login', methods=['POST', 'OPTIONS'])
 @auth_required
@@ -2826,6 +2828,8 @@ def generate_networking_message(user_info):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+
+
 
 
 
