@@ -557,8 +557,12 @@ def dispatch_event(event_type, payload):
         'payload': payload
     }
     with _event_lock:
-        with open(EVENTS_LOG, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        try:
+            with open(EVENTS_LOG, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        except Exception as e:
+            logger.warning(f"Failed to write to events log: {e}")
+            
     # Fire and forget email / webhook based on event
     if event_type == 'analysis.completed' and payload.get('notifyEmail'):
         send_email(payload['notifyEmail'], 'Analysis Completed', f"Match: {payload.get('matchPercentage')}%\nMode: {payload.get('mode')}")
