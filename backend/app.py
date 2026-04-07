@@ -861,7 +861,7 @@ def normalize_linkedin_profile(parsed, fallback_text=""):
 
     if not about.strip() or "error parsing" in about.lower() or "could not parse" in about.lower():
         cleaned = re.sub(r"```(?:json)?", "", fallback_text or "", flags=re.IGNORECASE).replace("```", "").strip()
-        if cleaned and "error parsing" not in cleaned.lower() and "could not parse" not in cleaned.lower():
+        if cleaned and "error parsing" not in cleaned.lower() and "could not parse" not in cleaned.lower() and not cleaned.startswith("{"):
             about = cleaned[:1400]
         else:
             about = (
