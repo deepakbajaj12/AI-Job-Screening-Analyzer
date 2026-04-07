@@ -23,6 +23,7 @@ class Config:
     COHERE_API_KEY: str | None = os.getenv("COHERE_API_KEY")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "cohere:command-r-08-2024")
+    LLM_TIMEOUT_SECONDS: int = int(os.getenv("LLM_TIMEOUT_SECONDS", "35"))
 
     DATA_DIR: str = os.getenv("DATA_DIR", "data")
 
