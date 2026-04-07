@@ -1,4 +1,4 @@
-﻿# MAIN APPLICATION: Flask server with 30+ endpoints for AI-powered resume analysis, recruiter tools, and coaching for both job seekers and recruiters
+# MAIN APPLICATION: Flask server with 30+ endpoints for AI-powered resume analysis, recruiter tools, and coaching for both job seekers and recruiters
 import os
 import sys
 # Add parent directory to path to ensure backend module can be imported
@@ -8,6 +8,7 @@ import json
 import re
 import uuid
 import time
+import concurrent.futures
 import hmac
 import hashlib
 import threading
@@ -197,6 +198,9 @@ INDIA_SALARY_BENCHMARKS = {
 COHERE_API_KEY = config.COHERE_API_KEY
 OPENAI_API_KEY = config.OPENAI_API_KEY
 LLM_MODEL = config.LLM_MODEL  # e.g. cohere:command-light-nightly or openai:gpt-5-codex-preview
+LLM_TIMEOUT_SECONDS = max(5, int(getattr(config, "LLM_TIMEOUT_SECONDS", 35) or 35))
+# Force sync execution on constrained deployments to prevent stuck queued jobs.
+ASYNC_TASKS_ENABLED = False
 
 cohere_client = cohere.Client(COHERE_API_KEY) if COHERE_API_KEY else None
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if (OPENAI_API_KEY and OpenAI) else None
@@ -649,14 +653,24 @@ def call_llm(prompt, temperature=0.6):
                 result = _get_mock_response(prompt)
             else:
                 try:
-                    # Note: Cohere SDK doesn't support timeout parameter
-                    resp = cohere_client.chat(
-                        model=model,
-                        message=prompt,
-                        temperature=temperature
-                    )
+                    # Run provider call in a bounded-time future so a stalled upstream
+                    # request cannot block the single-worker queue forever.
+                    def _cohere_chat_once():
+                        return cohere_client.chat(
+                            model=model,
+                            message=prompt,
+                            temperature=temperature
+                        )
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        fut = executor.submit(_cohere_chat_once)
+                        resp = fut.result(timeout=LLM_TIMEOUT_SECONDS)
+
                     result = resp.text.strip()
                     logger.info(f"llm.cohere_success model={model}")
+                except concurrent.futures.TimeoutError:
+                    logger.error(f"CoHere API timeout after {LLM_TIMEOUT_SECONDS}s provider={provider} model={model}")
+                    result = _get_mock_response(prompt)
                 except Exception as llm_err:
                     logger.error(f"CoHere API call failed: {llm_err} provider={provider} model={model}")
                     result = _get_mock_response(prompt)
@@ -863,9 +877,9 @@ def normalize_linkedin_profile(parsed, fallback_text=""):
     )
     if isinstance(highlights, str):
         highlights = [
-            line.strip(" -â€¢\t")
+            line.strip(" -•\t")
             for line in re.split(r"\r?\n+", highlights)
-            if line.strip(" -â€¢\t")
+            if line.strip(" -•\t")
         ]
     elif isinstance(highlights, list):
         cleaned_list = []
@@ -923,7 +937,7 @@ def format_general_feedback(feedback_text):
 
     # Split feedback by lines or common separators (numbers, dashes, newlines)
     lines = re.split(r"\n+|\d+\.\s+|- ", feedback_text)
-    cleaned = [line.strip("-â€¢ \n\t").strip() for line in lines if line.strip()]
+    cleaned = [line.strip("-• \n\t").strip() for line in lines if line.strip()]
 
     # Return bullet points for each meaningful line
     return "\n".join(f"- {line}" for line in cleaned)
@@ -935,18 +949,18 @@ def format_report(data):
     feedback = format_general_feedback(data["generalFeedback"])
 
     report = f"""
-ðŸ“ˆ Detailed Candidate Report
+📈 Detailed Candidate Report
 
-ðŸŸ¢ Strengths:
+🟢 Strengths:
 {strengths}
 
-ðŸŸ¡ Areas to Improve:
+🟡 Areas to Improve:
 {improvements}
 
-ðŸ”µ Recommended Roles:
+🔵 Recommended Roles:
 {recommended}
 
-ðŸ“ General Feedback:
+📝 General Feedback:
 {feedback}
 """
     return report.strip()
@@ -1005,8 +1019,8 @@ def extract_bullets(text):
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     bullets = []
     for line in lines:
-        if re.match(r"^[-*â€¢]", line) or len(line.split()) > 4:
-            bullets.append(line.lstrip("-*â€¢ ").strip())
+        if re.match(r"^[-*•]", line) or len(line.split()) > 4:
+            bullets.append(line.lstrip("-*• ").strip())
     return bullets[:100]
 
 def detect_skills(text):
@@ -1412,7 +1426,7 @@ def time_info():
         'timezone': time.tzname
     })
 
-@celery.task(bind=True)
+@celery.task(bind=True, name="backend.app.run_analysis_task")
 def run_analysis_task(self, mode, resume_text, job_desc_text, recruiter_email, user_info):
     start = time.time()
     
@@ -1538,7 +1552,7 @@ Job Description:
     
     return {"error": "Invalid mode"}
 
-@celery.task(bind=True)
+@celery.task(bind=True, name="backend.app.estimate_salary_task")
 def estimate_salary_task(self, resume_text, job_description, user_id="anonymous"):
     """
     Background task: Estimate salary based on resume and job description.
@@ -1582,7 +1596,7 @@ JOB DESCRIPTION:
 {trimmed_jd}
 
 Return JSON with:
-- estimated_salary_range: e.g. "â‚¹50L - â‚¹75L p.a."
+- estimated_salary_range: e.g. "₹50L - ₹75L p.a."
 - currency: "INR"
 - experience_level: "entry level", "mid level", "senior"
 - market_trends: Market insight for this role in India
@@ -1595,7 +1609,7 @@ Respond ONLY with valid JSON.'''
         if not response:
             if benchmark:
                 return {
-                    "estimated_salary_range": f"â‚¹{benchmark['min']/100000:.0f}L - â‚¹{benchmark['max']/100000:.0f}L p.a.",
+                    "estimated_salary_range": f"₹{benchmark['min']/100000:.0f}L - ₹{benchmark['max']/100000:.0f}L p.a.",
                     "currency": "INR",
                     "experience_level": benchmark.get("experience", "Not specified"),
                     "market_trends": f"Strong market demand for {detected_role} in 2025-2026.",
@@ -1626,7 +1640,7 @@ Respond ONLY with valid JSON.'''
         logger.error(f"Salary estimation task failed: {e}")
         return {"error": str(e)}
 
-@celery.task(bind=True)
+@celery.task(bind=True, name="backend.app.generate_career_path_task")
 def generate_career_path_task(self, resume_text, user_id="anonymous"):
     """
     Background task: Generate career roadmap based on resume.
@@ -1673,7 +1687,7 @@ Respond ONLY with valid JSON.'''
         logger.error(f"Career path generation task failed: {e}")
         return {"error": str(e)}
 
-@celery.task(bind=True)
+@celery.task(bind=True, name="backend.app.tailor_resume_task")
 def tailor_resume_task(self, resume_text, job_description, user_id="anonymous"):
     """
     Background task: Tailor resume to job description.
@@ -1722,6 +1736,7 @@ Respond ONLY with valid JSON.'''
         return {"error": str(e)}
 
 @app.route('/tasks/<task_id>', methods=['GET'])
+@cross_origin()
 def get_task_status(task_id):
     try:
         task = celery.AsyncResult(task_id)
@@ -1750,6 +1765,28 @@ def get_task_status(task_id):
     except Exception as e:
         logger.error(f"Error fetching celery task status: {e}")
         return jsonify({'state': 'FAILURE', 'error': str(e)}), 500
+
+
+# Backward-compatible task aliases for jobs queued by older/local clients as __main__.*
+@celery.task(bind=True, name="__main__.estimate_salary_task")
+def estimate_salary_task_legacy(self, resume_text, job_description, user_id="anonymous"):
+    return estimate_salary_task.run(resume_text, job_description, user_id)
+
+
+@celery.task(bind=True, name="__main__.generate_career_path_task")
+def generate_career_path_task_legacy(self, resume_text, user_id="anonymous"):
+    return generate_career_path_task.run(resume_text, user_id)
+
+
+@celery.task(bind=True, name="__main__.tailor_resume_task")
+def tailor_resume_task_legacy(self, resume_text, job_description, user_id="anonymous"):
+    return tailor_resume_task.run(resume_text, job_description, user_id)
+
+
+@celery.task(bind=True, name="__main__.run_analysis_task")
+def run_analysis_task_legacy(self, mode, resume_text, job_desc_text, recruiter_email, user_info):
+    return run_analysis_task.run(mode, resume_text, job_desc_text, recruiter_email, user_info)
+
 @app.route("/analyze", methods=["POST"])
 @cross_origin()
 @rate_limit(40, 60)
@@ -1813,67 +1850,58 @@ def analyze(user_info):
              if not job_desc_text or not recruiter_email:
                  return jsonify({"error": "Job description file and recruiterEmail are required"}), 400
 
-    # Try async queue first, fall back to synchronous execution
-    try:
-        raise Exception('Forcing synchronous execution')
+    # Optional async mode for higher-capacity deployments.
+    if ASYNC_TASKS_ENABLED:
         try:
-            from backend.queue_config import task_queue
-            from backend.worker_tasks import process_resume_analysis
-        except ImportError:
-            from queue_config import task_queue
-            from worker_tasks import process_resume_analysis
+            task = run_analysis_task.apply_async(
+                args=[mode, resume_text, job_desc_text, recruiter_email, user_info],
+                timeout=600,
+            )
 
-        if not task_queue:
-            raise Exception("Redis Connection failed, task_queue is None")
+            return jsonify({
+                "status": "queued",
+                "job_id": task.id,
+                "mode": mode
+            }), 202
 
-        job = task_queue.enqueue(
-            process_resume_analysis,
-            resume_text,
-            job_desc_text,
-            mode,
-            user_info.get("uid", "anonymous")
-        )
+        except Exception as e:
+            logger.warning(f"Async queue unavailable ({e}), executing synchronously")
 
-        return jsonify({
-            "status": "queued",
-            "job_id": job.id,
-            "mode": mode
-        }), 202
+    # Synchronous execution path (default for reliability on small instances).
+    result = run_analysis_task.run(mode, resume_text, job_desc_text, recruiter_email, user_info)
 
-    except Exception as e:
-        logger.warning(f"Queue unavailable ({e}), executing synchronously")
-        # Synchronous fallback
-        result = run_analysis_task(mode, resume_text, job_desc_text, "", user_info)
+    # Save to MongoDB
+    save_analysis(
+        user_id=user_info.get("uid", "anonymous"),
+        mode=mode,
+        result=result,
+        resume_excerpt=resume_text[:500],
+        job_desc_excerpt=job_desc_text[:500],
+    )
 
-        # Save to MongoDB
-        save_analysis(
-            user_id=user_info.get("uid", "anonymous"),
-            mode=mode,
-            result=result,
-            resume_excerpt=resume_text[:500],
-            job_desc_excerpt=job_desc_text[:500],
-        )
+    elapsed = round((time.time() - start) * 1000)
+    _metrics['analyze']['count'] += 1
+    _metrics['analyze']['avgMs'] = round(
+        (_metrics['analyze']['avgMs'] * (_metrics['analyze']['count'] - 1) + elapsed) / _metrics['analyze']['count'], 1
+    )
+    write_audit(user_info.get('uid'), 'analyze', {'mode': mode, 'ms': elapsed})
+    dispatch_event('analysis.completed', {
+        'mode': mode,
+        'userId': user_info.get('uid'),
+        'matchPercentage': result.get('combinedMatchPercentage') or result.get('semanticMatchPercentage'),
+        'notifyEmail': request.form.get('recruiterEmail') if not request.is_json else (request.json or {}).get('recruiterEmail')
+    })
 
-        elapsed = round((time.time() - start) * 1000)
-        _metrics['analyze']['count'] += 1
-        _metrics['analyze']['avgMs'] = round(
-            (_metrics['analyze']['avgMs'] * (_metrics['analyze']['count'] - 1) + elapsed) / _metrics['analyze']['count'], 1
-        )
-        write_audit(user_info.get('uid'), 'analyze', {'mode': mode, 'ms': elapsed})
-        dispatch_event('analysis.completed', {
-            'mode': mode,
-            'userId': user_info.get('uid'),
-            'matchPercentage': result.get('combinedMatchPercentage') or result.get('semanticMatchPercentage'),
-            'notifyEmail': request.form.get('recruiterEmail') if not request.is_json else (request.json or {}).get('recruiterEmail')
-        })
-
-        return jsonify(result)
+    if isinstance(result, dict):
+        result.setdefault("execution_mode", "sync")
+    return jsonify(result)
 
 @app.route("/status/<job_id>", methods=["GET"])
 def job_status(job_id):
     # 1) Try RQ jobs first (used by /analyze)
     try:
         from rq.job import Job
+        from rq.exceptions import NoSuchJobError
 
         redis_conn = None
         try:
@@ -1895,11 +1923,16 @@ def job_status(job_id):
                 if rq_status == 'failed':
                     return jsonify({'status': 'failed', 'error': str(job.exc_info)})
                 return jsonify({'status': rq_status or 'queued'})
+            except NoSuchJobError:
+                pass
             except Exception as e:
-                # RQ may raise different exception types for unknown jobs.
-                if 'No such job' not in str(e):
+                # Some RQ versions raise a generic exception for missing jobs.
+                if 'No such job' in str(e):
+                    pass
+                else:
                     logger.warning(f"RQ job fetch error for {job_id}: {e}")
     except Exception as e:
+        # Keep endpoint resilient for environments without RQ wired correctly.
         logger.warning(f"RQ status lookup unavailable: {e}")
 
     # 2) Fallback to Celery tasks (used by salary/tailor/career)
@@ -1911,18 +1944,21 @@ def job_status(job_id):
             return jsonify({'status': 'finished', 'result': task.result})
         if state in ('PENDING', 'RECEIVED', 'RETRY'):
             return jsonify({'status': 'queued'})
-        if state == 'STARTED':
+        if state in ('STARTED',):
             return jsonify({'status': 'started'})
         if state in ('FAILURE', 'REVOKED'):
             return jsonify({'status': 'failed', 'error': str(task.info)})
     except Exception as e:
         logger.warning(f"Celery status lookup unavailable: {e}")
 
+    # 3) Unknown ID in both backends
     return jsonify({
         'status': 'unknown',
         'message': 'Job not found. It may have completed and been cleaned up.'
     }), 404
-# =============================`r`n# History / Dashboard Endpoint
+
+# =============================
+# History / Dashboard Endpoint
 # =============================
 @app.route("/history", methods=["GET"])
 @auth_required
@@ -2488,25 +2524,26 @@ def estimate_salary(user_info):
     job_description = request.form.get('jobDescription', '')
     resume_text = extract_text_from_pdf(resume_file)
     
-    # Queue as async Celery task (avoids 120s Gunicorn timeout)
-    try:
-        raise Exception('Forcing synchronous execution')
-        task = estimate_salary_task.apply_async(
-            args=[resume_text, job_description, user_info.get("uid", "anonymous")],
-            timeout=300
-        )
-        return jsonify({
-            "status": "queued",
-            "job_id": task.id,
-            "mode": "salary_estimation"
-        }), 202
-    except Exception as e:
-        logger.warning(f"Celery task queue failed: {e}, falling back to sync")
-        # Synchronous fallback for when async unavailable
-        result = estimate_salary_task.apply(
-            args=[resume_text, job_description, user_info.get("uid", "anonymous")]
-        ).get()
-        return jsonify(result)
+    if ASYNC_TASKS_ENABLED:
+        try:
+            task = estimate_salary_task.apply_async(
+                args=[resume_text, job_description, user_info.get("uid", "anonymous")],
+                timeout=300  # 5 minutes - extended for Cohere API calls
+            )
+            return jsonify({
+                "status": "queued",
+                "job_id": task.id,
+                "mode": "salary_estimation"
+            }), 202
+        except Exception as e:
+            logger.warning(f"Celery task queue failed: {e}, falling back to sync")
+
+    result = estimate_salary_task.run(
+        resume_text,
+        job_description,
+        user_info.get("uid", "anonymous")
+    )
+    return jsonify(result)
 
 @app.route('/tailor-resume', methods=['POST'])
 @cross_origin()
@@ -2524,25 +2561,26 @@ def tailor_resume(user_info):
     if not resume_text:
         return jsonify({'error': 'Failed to extract resume text'}), 400
     
-    # Queue as async Celery task
-    try:
-        raise Exception('Forcing synchronous execution')
-        task = tailor_resume_task.apply_async(
-            args=[resume_text, job_description, user_info.get("uid", "anonymous")],
-            timeout=300
-        )
-        return jsonify({
-            "status": "queued",
-            "job_id": task.id,
-            "mode": "tailor_resume"
-        }), 202
-    except Exception as e:
-        logger.warning(f"Celery task queue failed: {e}, falling back to sync")
-        # Synchronous fallback for when async unavailable
-        result = tailor_resume_task.apply(
-            args=[resume_text, job_description, user_info.get("uid", "anonymous")]
-        ).get()
-        return jsonify(result)
+    if ASYNC_TASKS_ENABLED:
+        try:
+            task = tailor_resume_task.apply_async(
+                args=[resume_text, job_description, user_info.get("uid", "anonymous")],
+                timeout=300  # 5 minutes - extended for Cohere API calls
+            )
+            return jsonify({
+                "status": "queued",
+                "job_id": task.id,
+                "mode": "tailor_resume"
+            }), 202
+        except Exception as e:
+            logger.warning(f"Celery task queue failed: {e}, falling back to sync")
+
+    result = tailor_resume_task.run(
+        resume_text,
+        job_description,
+        user_info.get("uid", "anonymous")
+    )
+    return jsonify(result)
 
 @app.route('/generate-career-path', methods=['POST'])
 @cross_origin()
@@ -2559,25 +2597,25 @@ def generate_career_path(user_info):
     if not resume_text:
         return jsonify({'error': 'Failed to extract resume text'}), 400
     
-    # Queue as async Celery task
-    try:
-        raise Exception('Forcing synchronous execution')
-        task = generate_career_path_task.apply_async(
-            args=[resume_text, user_info.get("uid", "anonymous")],
-            timeout=300
-        )
-        return jsonify({
-            "status": "queued",
-            "job_id": task.id,
-            "mode": "career_path"
-        }), 202
-    except Exception as e:
-        logger.warning(f"Celery task queue failed: {e}, falling back to sync")
-        # Synchronous fallback for when async unavailable
-        result = generate_career_path_task.apply(
-            args=[resume_text, user_info.get("uid", "anonymous")]
-        ).get()
-        return jsonify(result)
+    if ASYNC_TASKS_ENABLED:
+        try:
+            task = generate_career_path_task.apply_async(
+                args=[resume_text, user_info.get("uid", "anonymous")],
+                timeout=300  # 5 minutes - extended for Cohere API calls
+            )
+            return jsonify({
+                "status": "queued",
+                "job_id": task.id,
+                "mode": "career_path"
+            }), 202
+        except Exception as e:
+            logger.warning(f"Celery task queue failed: {e}, falling back to sync")
+
+    result = generate_career_path_task.run(
+        resume_text,
+        user_info.get("uid", "anonymous")
+    )
+    return jsonify(result)
 
 @app.route('/generate-job-description', methods=['POST'])
 @cross_origin()
@@ -2596,8 +2634,17 @@ def generate_job_description(user_info):
     Required Skills: {skills}
     Experience Level: {experience}
     
-    Return a JSON object with:
-    - job_description: The full formatted job description text.
+    Return a JSON object with a "job_description" key containing exactly this structure:
+    {{
+      "title": "String",
+      "overview": "String",
+      "responsibilities": ["List of strings"],
+      "skills_and_experience": {{
+        "required": ["List of required skills and experience"],
+        "preferred": ["List of preferred skills"]
+      }},
+      "benefits": ["List of benefits"]
+    }}
     '''
     
     response = call_llm(prompt, temperature=0.7)
@@ -2832,8 +2879,4 @@ def generate_networking_message(user_info):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
-
-
-
-
 
