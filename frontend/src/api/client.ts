@@ -308,6 +308,19 @@ export async function generateCoverLetter(token: string | null, payload: { resum
   return res.json()
 }
 
+export async function runAiOrchestrator(token: string | null, payload: { resume: File, jobDescription: string }) {
+  const form = new FormData()
+  form.append('resume', payload.resume)
+  form.append('jobDescription', payload.jobDescription)
+  const res = await fetch(`${API_BASE}/ai-orchestrator`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form
+  })
+  if (!res.ok) throw new Error(`AI orchestrator failed: ${res.status}`)
+  return res.json()
+}
+
 export async function generateInterviewQuestions(token: string | null, payload: { resume: File, jobDescription: string }) {
   const form = new FormData()
   form.append('resume', payload.resume)

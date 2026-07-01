@@ -315,6 +315,53 @@ class TestAnalyzeEndpoint:
         assert "confidenceScore" in dashboard
 
 
+class TestAIOrchestratorEndpoint:
+    @patch("backend.app.extract_text_from_pdf")
+    @patch("backend.app.call_llm")
+    @patch("backend.app.save_analysis")
+    def test_ai_orchestrator_returns_composite_package(self, mock_save, mock_llm, mock_extract, client):
+        mock_extract.return_value = (
+            "Summary\nExperienced Python developer\n"
+            "Skills\nPython, Flask, Docker, AWS\n"
+            "Experience\nBuilt scalable APIs and shipped production systems."
+        )
+        mock_llm.side_effect = [
+            json.dumps({
+                "strengths": ["Python", "Flask"],
+                "improvementAreas": ["System design"],
+                "recommendedRoles": ["Backend Engineer"],
+                "generalFeedback": "Strong match",
+            }),
+            json.dumps({
+                "rewritten_summary": "Tailored summary",
+                "tailored_bullets": [{"original": "Built APIs", "rewritten": "Built scalable APIs"}],
+            }),
+            "Tailored cover letter for the role.",
+            json.dumps({"questions": ["How would you scale this API?", "Describe a production incident."]}),
+        ]
+
+        data = {
+            "resume": (io.BytesIO(b"fake pdf bytes"), "resume.pdf"),
+            "jobDescription": "Backend Engineer role focused on APIs and cloud deployment",
+        }
+        response = client.post(
+            "/ai-orchestrator",
+            data=data,
+            content_type="multipart/form-data",
+        )
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["targetRole"] == "Backend Engineer"
+        assert len(payload["workflow"]) == 5
+        assert payload["analysis"]["recommendedRoles"] == ["Backend Engineer"]
+        assert payload["tailoredResume"]["rewritten_summary"] == "Tailored summary"
+        assert payload["coverLetter"]["coverLetter"] == "Tailored cover letter for the role."
+        assert payload["interviewQuestions"]["questions"][0] == "How would you scale this API?"
+        assert payload["recommendations"]["primaryAction"]
+        mock_save.assert_called_once()
+
+
 # =============================
 # 6. Cover Letter Generation Tests
 # =============================

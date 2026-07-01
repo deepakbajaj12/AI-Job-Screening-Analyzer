@@ -1,6 +1,6 @@
 // JOB SEEKER PAGE: Multiple AI tools - resume matching, cover letter generation, interview prep, salary estimation, career path, LinkedIn profile generation
 import { useState } from 'react'
-import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage, downloadAnalysisPdf, downloadCoverLetterPdf } from '../api/client'
+import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage, runAiOrchestrator, downloadAnalysisPdf, downloadCoverLetterPdf } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
 import DragAndDropUpload from '../components/DragAndDropUpload'
@@ -13,7 +13,7 @@ export default function JobSeeker() {
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking'>('analyze')
+  const [activeTab, setActiveTab] = useState<'orchestrator' | 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking'>('analyze')
 
   // Networking State
   const [netRole, setNetRole] = useState('')
@@ -21,21 +21,38 @@ export default function JobSeeker() {
   const [netRecipient, setNetRecipient] = useState('')
   const [netType, setNetType] = useState('linkedin_connect')
 
-  const handleAction = async (action: 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking') => {
-    setError(null); setResult(null); setActiveTab(action)
-    
-    if (!token) { setError('Please log in to use Job Seeker tools'); return }
-    
+  const handleAction = async (action: 'orchestrator' | 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking') => {
+    setError(null)
+    setResult(null)
+
+    if (!token) {
+      setError('Please log in to use Job Seeker tools')
+      return
+    }
+
     if (action === 'networking') {
+      setActiveTab(action)
       // No resume needed for networking, but we need form inputs
       return
     }
 
-    if (!resume) { setError('Please select a resume PDF'); return }
+    if (!resume) {
+      setError('Please select a resume PDF')
+      return
+    }
+
+    if (action === 'orchestrator' && !jobDescription) {
+      setError('Please provide a job description for the orchestrator')
+      return
+    }
+
+    setActiveTab(action)
     setLoading(true)
     try {
       let data;
-      if (action === 'analyze') {
+      if (action === 'orchestrator') {
+        data = await runAiOrchestrator(token, { resume, jobDescription })
+      } else if (action === 'analyze') {
         data = await analyzeJobSeeker(token, { resume, jobDescription })
       } else if (action === 'coverLetter') {
         data = await generateCoverLetter(token, { resume, jobDescription })
@@ -117,6 +134,7 @@ export default function JobSeeker() {
         </label>
         
         <div className="actions" style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap' }}>
+          <button className="btn" onClick={() => handleAction('orchestrator')} disabled={loading}>AI Orchestrator</button>
           <button className="btn" onClick={() => handleAction('analyze')} disabled={loading}>Analyze Match</button>
           <button className="btn" onClick={() => handleAction('coverLetter')} disabled={loading}>Generate Cover Letter</button>
           <button className="btn" onClick={() => handleAction('questions')} disabled={loading}>Interview Questions</button>
@@ -161,7 +179,7 @@ export default function JobSeeker() {
       
       {result && activeTab !== 'networking' && (
         <div className="card">
-          <h3>Result: {activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : activeTab === 'health' ? 'Resume Health Check' : 'Skill Gap'}</h3>
+          <h3>Result: {activeTab === 'orchestrator' ? 'AI Orchestrator' : activeTab === 'analyze' ? 'Analysis' : activeTab === 'coverLetter' ? 'Cover Letter' : activeTab === 'questions' ? 'Interview Questions' : activeTab === 'linkedin' ? 'LinkedIn Profile' : activeTab === 'salary' ? 'Salary Estimation' : activeTab === 'tailor' ? 'Tailored Resume' : activeTab === 'career' ? 'Career Roadmap' : activeTab === 'health' ? 'Resume Health Check' : 'Skill Gap'}</h3>
           
           <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button className="btn" style={{ backgroundColor: '#28a745' }} onClick={handleDownload}>📥 Download JSON</button>
@@ -174,6 +192,45 @@ export default function JobSeeker() {
 
           {activeTab === 'coverLetter' && (
             <div className="report" style={{ whiteSpace: 'pre-wrap' }}>{typeof result.coverLetter === 'string' ? result.coverLetter : JSON.stringify(result.coverLetter, null, 2)}</div>
+          )}
+
+          {activeTab === 'orchestrator' && (
+            <div className="report">
+              <h4>Target Role</h4>
+              <p>{typeof result.targetRole === 'string' ? result.targetRole : JSON.stringify(result.targetRole)}</p>
+
+              <h4>Workflow</h4>
+              <ol>
+                {Array.isArray(result.workflow) ? result.workflow.map((step: any, i: number) => (
+                  <li key={i} style={{ marginBottom: '10px' }}>
+                    <strong>{step.step}</strong> - {step.summary}
+                  </li>
+                )) : <li>{JSON.stringify(result.workflow)}</li>}
+              </ol>
+
+              <h4>Analysis Snapshot</h4>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{result.analysis?.formattedReport || JSON.stringify(result.analysis, null, 2)}</div>
+
+              <h4>Tailored Resume</h4>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{typeof result.tailoredResume?.rewritten_summary === 'string' ? result.tailoredResume.rewritten_summary : JSON.stringify(result.tailoredResume, null, 2)}</div>
+
+              <h4>Cover Letter</h4>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{typeof result.coverLetter?.coverLetter === 'string' ? result.coverLetter.coverLetter : JSON.stringify(result.coverLetter, null, 2)}</div>
+
+              <h4>Interview Questions</h4>
+              <ul>
+                {Array.isArray(result.interviewQuestions?.questions)
+                  ? result.interviewQuestions.questions.map((question: any, i: number) => <li key={i}>{typeof question === 'string' ? question : JSON.stringify(question)}</li>)
+                  : <li>{JSON.stringify(result.interviewQuestions)}</li>}
+              </ul>
+
+              {result.recommendations && (
+                <>
+                  <h4>Recommendations</h4>
+                  <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(result.recommendations, null, 2)}</pre>
+                </>
+              )}
+            </div>
           )}
 
           {activeTab === 'questions' && (

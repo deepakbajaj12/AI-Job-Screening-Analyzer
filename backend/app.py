@@ -1244,6 +1244,147 @@ Top Skills: {', '.join(top_skills)}
     except Exception:
         return [q.strip() for q in re.split(r"\n+", resp) if q.strip()][:8]
 
+def _generate_cover_letter_text(resume_text, job_description):
+    prompt = f"""
+You are an expert career coach. Write a professional and persuasive cover letter for the following candidate based on their resume and the job description.
+
+RESUME:
+{resume_text[:3000]}
+
+JOB DESCRIPTION:
+{job_description[:3000]}
+
+The cover letter should be formatted correctly, highlight relevant skills, and express enthusiasm for the role.
+"""
+    cover_letter = call_llm(prompt, temperature=0.7)
+    return cover_letter or "Failed to generate cover letter."
+
+def _infer_orchestrator_role(job_description, analysis_result):
+    recommended_roles = []
+    if isinstance(analysis_result, dict):
+        recommended_roles = analysis_result.get("recommendedRoles") or []
+    for role in recommended_roles:
+        if isinstance(role, str) and role.strip():
+            return role.strip()
+
+    for line in (job_description or "").splitlines():
+        candidate = line.strip(" -*•\t")
+        if candidate and len(candidate) >= 4:
+            return candidate[:80]
+
+    return "Target Role"
+
+def _build_orchestrator_workflow(analysis_result, tailored_resume, cover_letter, interview_questions, target_role):
+    workflow = [
+        {
+            "step": "Analyze resume",
+            "status": "completed",
+            "summary": "Generated ATS-style insights, strengths, improvement areas, and match scoring.",
+        },
+        {
+            "step": "Compare with job description",
+            "status": "completed",
+            "summary": "Calculated lexical and semantic alignment to identify fit and skill gaps.",
+        },
+        {
+            "step": "Tailor resume",
+            "status": "completed",
+            "summary": "Rewrote the candidate summary and experience bullets to better match the target role.",
+        },
+        {
+            "step": "Generate cover letter",
+            "status": "completed",
+            "summary": "Drafted a role-specific cover letter aligned with the candidate profile.",
+        },
+        {
+            "step": "Generate interview questions",
+            "status": "completed",
+            "summary": "Prepared targeted questions for the target role and the candidate's likely gaps.",
+        },
+    ]
+
+    return {
+        "targetRole": target_role,
+        "workflow": workflow,
+        "analysis": analysis_result,
+        "tailoredResume": tailored_resume,
+        "coverLetter": {"coverLetter": cover_letter},
+        "interviewQuestions": {"questions": interview_questions},
+    }
+
+@app.route('/ai-orchestrator', methods=['POST'])
+@cross_origin()
+@auth_required
+@rate_limit(max_requests=8, per_seconds=60)
+def ai_orchestrator(user_info):
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file provided'}), 400
+
+    resume_file = request.files['resume']
+    job_description = request.form.get('jobDescription', '')
+    resume_text = extract_text_from_pdf(resume_file)
+
+    if not resume_text:
+        return jsonify({'error': 'Could not extract text from PDF'}), 400
+
+    user_id = user_info.get('uid', 'anonymous')
+
+    analysis_result = run_analysis_task.run(
+        "jobSeeker",
+        resume_text,
+        job_description,
+        "",
+        user_info,
+    )
+
+    if not isinstance(analysis_result, dict) or analysis_result.get('error'):
+        return jsonify({'error': 'Failed to analyze resume', 'details': analysis_result}), 500
+
+    tailored_resume = tailor_resume_task.run(resume_text, job_description, user_id)
+    if not isinstance(tailored_resume, dict) or tailored_resume.get('error'):
+        return jsonify({'error': 'Failed to tailor resume', 'details': tailored_resume}), 500
+
+    target_role = _infer_orchestrator_role(job_description, analysis_result)
+    top_skills = detect_skills(job_description or resume_text)
+    if not top_skills:
+        top_skills = detect_skills(resume_text)
+
+    resume_excerpt = trim_resume_for_prompt(resume_text, max_length=900)
+    interview_questions = _generate_interview_questions_for_role(
+        resume_excerpt,
+        target_role,
+        top_skills[:8],
+    )
+    cover_letter = _generate_cover_letter_text(resume_text, job_description)
+
+    orchestrator_result = _build_orchestrator_workflow(
+        analysis_result=analysis_result,
+        tailored_resume=tailored_resume,
+        cover_letter=cover_letter,
+        interview_questions=interview_questions,
+        target_role=target_role,
+    )
+
+    orchestrator_result["recommendations"] = {
+        "primaryAction": "Use the tailored resume and cover letter for the target application.",
+        "interviewFocus": analysis_result.get("improvementAreas", [])[:4],
+        "skillSignals": top_skills[:8],
+    }
+    orchestrator_result["formattedReport"] = format_report(analysis_result)
+
+    try:
+        save_analysis(
+            user_id=user_id,
+            mode="ai_orchestrator",
+            result=orchestrator_result,
+            resume_excerpt=resume_text[:500],
+            job_desc_excerpt=job_description[:500],
+        )
+    except Exception as e:
+        logger.warning(f"Failed to save orchestrator result: {e}")
+
+    return jsonify(orchestrator_result)
+
 def auth_required(fn):
     """Decorator-like helper for token verification inside route bodies."""
     def wrapper(*args, **kwargs):
@@ -2300,19 +2441,7 @@ def generate_cover_letter(user_info):
     if not resume_text:
         return jsonify({'error': 'Could not extract text from PDF'}), 400
 
-    prompt = f"""
-    You are an expert career coach. Write a professional and persuasive cover letter for the following candidate based on their resume and the job description.
-    
-    RESUME:
-    {resume_text[:3000]}
-    
-    JOB DESCRIPTION:
-    {job_description[:3000]}
-    
-    The cover letter should be formatted correctly, highlight relevant skills, and express enthusiasm for the role.
-    """
-    
-    cover_letter = call_llm(prompt, temperature=0.7)
+    cover_letter = _generate_cover_letter_text(resume_text, job_description)
     if not cover_letter:
         return jsonify({'error': 'Failed to generate cover letter'}), 500
         
