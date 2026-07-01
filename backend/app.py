@@ -1312,6 +1312,29 @@ def _build_orchestrator_workflow(analysis_result, tailored_resume, cover_letter,
         "interviewQuestions": {"questions": interview_questions},
     }
 
+def auth_required(fn):
+    """Decorator-like helper for token verification inside route bodies."""
+    def wrapper(*args, **kwargs):
+        if request.method == "OPTIONS":
+            return app.make_default_options_response()
+
+        if config.DEV_BYPASS_AUTH:
+            # Inject mock user only in dev mode
+            return fn({"uid": "dev-user", "email": "dev@local"}, *args, **kwargs)
+
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            # Return 401 Unauthorized for missing bearer token on protected endpoints
+            return jsonify({"error": "Authorization header with Bearer token is required"}), 401
+
+        id_token = auth_header.split("Bearer ")[1]
+        user_info = verify_firebase_token(id_token)
+        if not user_info:
+            return jsonify({"error": "Invalid or expired token"}), 401
+        return fn(user_info, *args, **kwargs)
+    wrapper.__name__ = fn.__name__
+    return wrapper
+
 @app.route('/ai-orchestrator', methods=['POST'])
 @cross_origin()
 @auth_required
@@ -1384,29 +1407,6 @@ def ai_orchestrator(user_info):
         logger.warning(f"Failed to save orchestrator result: {e}")
 
     return jsonify(orchestrator_result)
-
-def auth_required(fn):
-    """Decorator-like helper for token verification inside route bodies."""
-    def wrapper(*args, **kwargs):
-        if request.method == "OPTIONS":
-            return app.make_default_options_response()
-
-        if config.DEV_BYPASS_AUTH:
-            # Inject mock user only in dev mode
-            return fn({"uid": "dev-user", "email": "dev@local"}, *args, **kwargs)
-            
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            # Return 401 Unauthorized for missing bearer token on protected endpoints
-            return jsonify({"error": "Authorization header with Bearer token is required"}), 401
-
-        id_token = auth_header.split("Bearer ")[1]
-        user_info = verify_firebase_token(id_token)
-        if not user_info:
-            return jsonify({"error": "Invalid or expired token"}), 401
-        return fn(user_info, *args, **kwargs)
-    wrapper.__name__ = fn.__name__
-    return wrapper
 
 @app.route("/", methods=["GET"])
 def index():
