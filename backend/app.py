@@ -16,6 +16,7 @@ import socket
 import gc
 from datetime import datetime
 from collections import defaultdict
+from math import asin, cos, radians, sin, sqrt
 from flask import Flask, request, jsonify, url_for, g, send_file
 from flask_cors import CORS, cross_origin
 import firebase_admin
@@ -220,6 +221,8 @@ DATA_DIR = config.DATA_DIR
 COACHING_DIR = os.path.join(DATA_DIR, "coaching")
 VERSIONS_FILE = os.path.join(COACHING_DIR, "resume_versions.json")
 WELCOME_EMAILS_FILE = os.path.join(COACHING_DIR, "welcome_emails.json")
+MAP_LOCATIONS_FILE = os.path.join(COACHING_DIR, "map_locations.json")
+MAP_SELECTIONS_FILE = os.path.join(COACHING_DIR, "map_selections.json")
 RECRUITER_DIR = os.path.join(DATA_DIR, "recruiter")
 RECRUITER_TEMPLATES_FILE = os.path.join(RECRUITER_DIR, "templates.json")
 AUDIT_DIR = os.path.join(DATA_DIR, "audit")
@@ -237,11 +240,135 @@ if not os.path.exists(ROLES_FILE):
 
 _versions_lock = threading.Lock()
 _welcome_lock = threading.Lock()
+_map_lock = threading.Lock()
 _audit_lock = threading.Lock()
 _event_lock = threading.Lock()
 _rate_lock = threading.Lock()
 _template_lock = threading.Lock()
 _rate_buckets = defaultdict(list)  # key -> list[timestamps]
+
+DEFAULT_MAP_LOCATIONS = [
+    {
+        "id": "mentor-bangalore-1",
+        "name": "Career Springboard Mentors",
+        "type": "mentor",
+        "roleTags": ["software engineer", "backend", "full stack", "devops"],
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "country": "India",
+        "address": "Indiranagar, Bengaluru",
+        "lat": 12.9716,
+        "lon": 77.5946,
+        "rating": 4.8,
+        "contact": "mentors@careerspringboard.example",
+        "hours": "Mon-Fri 10:00-19:00",
+    },
+    {
+        "id": "center-hyderabad-1",
+        "name": "Interview Practice Hub",
+        "type": "center",
+        "roleTags": ["software engineer", "qa", "testing", "product manager"],
+        "city": "Hyderabad",
+        "state": "Telangana",
+        "country": "India",
+        "address": "HITEC City, Hyderabad",
+        "lat": 17.4435,
+        "lon": 78.3772,
+        "rating": 4.7,
+        "contact": "hello@interviewpractice.example",
+        "hours": "Daily 09:00-18:00",
+    },
+    {
+        "id": "mentor-delhi-1",
+        "name": "North Star Mentorship",
+        "type": "mentor",
+        "roleTags": ["data scientist", "ml engineer", "analytics"],
+        "city": "New Delhi",
+        "state": "Delhi",
+        "country": "India",
+        "address": "Connaught Place, New Delhi",
+        "lat": 28.6315,
+        "lon": 77.2167,
+        "rating": 4.9,
+        "contact": "team@northstar.example",
+        "hours": "Mon-Sat 11:00-20:00",
+    },
+    {
+        "id": "center-mumbai-1",
+        "name": "CareerMap Coaching Studio",
+        "type": "center",
+        "roleTags": ["product manager", "business analyst", "software engineer"],
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "country": "India",
+        "address": "Andheri West, Mumbai",
+        "lat": 19.1197,
+        "lon": 72.8464,
+        "rating": 4.6,
+        "contact": "studio@careermap.example",
+        "hours": "Mon-Fri 10:00-19:30",
+    },
+    {
+        "id": "mentor-pune-1",
+        "name": "ScaleUp Mentors",
+        "type": "mentor",
+        "roleTags": ["devops", "cloud", "software engineer"],
+        "city": "Pune",
+        "state": "Maharashtra",
+        "country": "India",
+        "address": "Baner, Pune",
+        "lat": 18.5204,
+        "lon": 73.8567,
+        "rating": 4.5,
+        "contact": "hello@scaleup.example",
+        "hours": "Tue-Sun 10:00-18:00",
+    },
+    {
+        "id": "center-chennai-1",
+        "name": "Career Path Training Center",
+        "type": "center",
+        "roleTags": ["qa", "software engineer", "data analyst"],
+        "city": "Chennai",
+        "state": "Tamil Nadu",
+        "country": "India",
+        "address": "T. Nagar, Chennai",
+        "lat": 13.0827,
+        "lon": 80.2707,
+        "rating": 4.4,
+        "contact": "support@careerpath.example",
+        "hours": "Mon-Sat 09:00-18:00",
+    },
+    {
+        "id": "mentor-kolkata-1",
+        "name": "East Coast Mentor Network",
+        "type": "mentor",
+        "roleTags": ["software engineer", "frontend", "product manager"],
+        "city": "Kolkata",
+        "state": "West Bengal",
+        "country": "India",
+        "address": "Salt Lake, Kolkata",
+        "lat": 22.5726,
+        "lon": 88.3639,
+        "rating": 4.3,
+        "contact": "connect@eastcoast.example",
+        "hours": "Mon-Fri 11:00-19:00",
+    },
+    {
+        "id": "center-ahmedabad-1",
+        "name": "Interview Launchpad",
+        "type": "center",
+        "roleTags": ["software engineer", "devops", "data scientist"],
+        "city": "Ahmedabad",
+        "state": "Gujarat",
+        "country": "India",
+        "address": "SG Highway, Ahmedabad",
+        "lat": 23.0225,
+        "lon": 72.5714,
+        "rating": 4.2,
+        "contact": "team@interviewlaunchpad.example",
+        "hours": "Daily 10:00-18:00",
+    },
+]
 
 def rate_limit(max_requests=30, per_seconds=60, key_fn=None):
     def decorator(fn):
@@ -337,6 +464,93 @@ def _write_versions_store(store):
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(store, f, ensure_ascii=False, indent=2)
     os.replace(tmp_path, VERSIONS_FILE)
+
+def _read_json_store(path, default):
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def _write_json_store(path, store):
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(store, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+
+def _read_map_locations_store():
+    locations = _read_json_store(MAP_LOCATIONS_FILE, None)
+    if isinstance(locations, list) and locations:
+        return locations
+    return DEFAULT_MAP_LOCATIONS
+
+def _read_map_selections_store():
+    store = _read_json_store(MAP_SELECTIONS_FILE, {})
+    return store if isinstance(store, dict) else {}
+
+def _write_map_selections_store(store):
+    _write_json_store(MAP_SELECTIONS_FILE, store)
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    earth_radius_km = 6371.0
+    d_lat = radians(lat2 - lat1)
+    d_lon = radians(lon2 - lon1)
+    a = sin(d_lat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon / 2) ** 2
+    return 2 * earth_radius_km * asin(min(1, sqrt(a)))
+
+def _normalize_text(value):
+    return str(value or "").strip().lower()
+
+def _parse_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+def _location_matches_filters(location, role=None, city=None):
+    if role:
+        role_value = _normalize_text(role)
+        role_tags = [_normalize_text(tag) for tag in location.get("roleTags", [])]
+        if role_value not in role_tags and not any(role_value in tag or tag in role_value for tag in role_tags):
+            return False
+
+    if city:
+        city_value = _normalize_text(city)
+        fields = [
+            _normalize_text(location.get("city")),
+            _normalize_text(location.get("state")),
+            _normalize_text(location.get("address")),
+        ]
+        if not any(city_value in field or field in city_value for field in fields):
+            return False
+
+    return True
+
+def _attach_map_selection_to_version(user_id, selection_record, version_number=None):
+    with _versions_lock:
+        store = _read_versions_store()
+        versions = store.get(user_id, [])
+        if not versions:
+            return None
+
+        target_index = len(versions) - 1
+        if version_number is not None:
+            for index, version in enumerate(versions):
+                if version.get("version") == version_number:
+                    target_index = index
+                    break
+
+        target_version = versions[target_index]
+        map_data = target_version.setdefault("mapData", {})
+        selections = map_data.setdefault("selections", [])
+        selections.append(selection_record)
+        map_data["lastUpdated"] = selection_record.get("selectedAt")
+        map_data["count"] = len(selections)
+        store[user_id] = versions
+        _write_versions_store(store)
+        return target_version
 
 def list_versions(user_id):
     store = _read_versions_store()
@@ -2379,6 +2593,122 @@ def coaching_diff(user_info):
     }
     write_audit(user_id, 'coaching.diff', {'prev': prev.get('version'), 'curr': curr.get('version')})
     return jsonify(result)
+
+@app.route('/coaching/locations', methods=['GET'])
+@auth_required
+def coaching_locations(user_info):
+    user_id = user_info.get('uid')
+    role = request.args.get('role', '').strip()
+    city = request.args.get('city', '').strip()
+    radius_km = _parse_float(request.args.get('radiusKm'))
+    lat = _parse_float(request.args.get('lat'))
+    lon = _parse_float(request.args.get('lon'))
+
+    if (lat is None or lon is None):
+        selections_store = _read_map_selections_store()
+        recent = selections_store.get(user_id, [])
+        if recent:
+            recent_location = recent[-1].get('location', {})
+            lat = _parse_float(recent_location.get('lat'))
+            lon = _parse_float(recent_location.get('lon'))
+
+    center = {'lat': lat, 'lon': lon} if lat is not None and lon is not None else None
+
+    locations = []
+    for location in _read_map_locations_store():
+        if not _location_matches_filters(location, role=role, city=city):
+            continue
+
+        enriched = dict(location)
+        if center:
+            distance_km = _haversine_km(center['lat'], center['lon'], location['lat'], location['lon'])
+            enriched['distanceKm'] = round(distance_km, 1)
+            if radius_km is not None and distance_km > radius_km:
+                continue
+        locations.append(enriched)
+
+    if center:
+        locations.sort(key=lambda item: (item.get('distanceKm', 999999.0), -float(item.get('rating', 0) or 0)))
+    else:
+        locations.sort(key=lambda item: (-float(item.get('rating', 0) or 0), item.get('city', '')))
+
+    selections_store = _read_map_selections_store()
+    saved_selections = selections_store.get(user_id, [])[-10:]
+
+    write_audit(user_id, 'coaching.locations.search', {
+        'role': role or None,
+        'city': city or None,
+        'radiusKm': radius_km,
+        'matched': len(locations),
+    })
+
+    return jsonify({
+        'center': center,
+        'filters': {
+            'role': role,
+            'city': city,
+            'radiusKm': radius_km,
+        },
+        'locations': locations,
+        'savedSelections': saved_selections,
+    })
+
+@app.route('/coaching/locations/select', methods=['POST'])
+@auth_required
+@rate_limit(20, 300)
+def coaching_select_location(user_info):
+    user_id = user_info.get('uid')
+    data = request.get_json(silent=True) or {}
+    location_id = str(data.get('locationId') or '').strip()
+    version_number = data.get('version')
+    note = str(data.get('note') or '').strip()
+
+    selected_location = None
+    for location in _read_map_locations_store():
+        if location.get('id') == location_id:
+            selected_location = dict(location)
+            break
+
+    if not selected_location:
+        return jsonify({'error': 'Location not found'}), 404
+
+    selection_record = {
+        'selectedAt': datetime.utcnow().isoformat() + 'Z',
+        'locationId': selected_location.get('id'),
+        'location': selected_location,
+        'note': note,
+    }
+
+    with _map_lock:
+        store = _read_map_selections_store()
+        user_selections = store.get(user_id, [])
+        user_selections.append(selection_record)
+        store[user_id] = user_selections
+        _write_map_selections_store(store)
+
+    attached_version = None
+    try:
+        attached_version = _attach_map_selection_to_version(user_id, selection_record, int(version_number) if version_number else None)
+    except Exception as exc:
+        logger.warning('coaching.location.attach_failed user=%s error=%s', user_id, exc)
+
+    write_audit(user_id, 'coaching.location.select', {
+        'locationId': selected_location.get('id'),
+        'city': selected_location.get('city'),
+        'version': version_number or (attached_version or {}).get('version'),
+    })
+    dispatch_event('coaching.location.selected', {
+        'userId': user_id,
+        'locationId': selected_location.get('id'),
+        'locationName': selected_location.get('name'),
+        'city': selected_location.get('city'),
+        'type': selected_location.get('type'),
+    })
+
+    return jsonify({
+        'selection': selection_record,
+        'attachedVersion': attached_version,
+    })
 
 # =============================
 # Admin: Fetch recent audit entries

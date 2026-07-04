@@ -24,6 +24,12 @@ export default function Coaching() {
   const [saveNotice, setSaveNotice] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  const refreshCoachingData = async () => {
+    if (!token) return
+    const p = await coachingProgress(token)
+    setProgress(p)
+  }
+
   useEffect(() => {
     if (!token) return
     setError(null)
@@ -97,7 +103,7 @@ export default function Coaching() {
     setLoading(true); setError(null)
     try {
       const saved = await coachingSaveVersion(token, { resume: resumeFile, jobDescription: jdText })
-      setProgress(await coachingProgress(token))
+      await refreshCoachingData()
       setStudy(await coachingStudyPack(token))
       const versionNumber = saved?.saved?.version
       setSaveNotice(versionNumber ? `Version v${versionNumber} saved successfully.` : 'Version saved successfully.')
@@ -169,6 +175,18 @@ export default function Coaching() {
               <button className="btn" style={{ backgroundColor: '#007bff' }} onClick={handleDownloadProgressPdf} disabled={downloadingPdf}>📄 Download PDF</button>
             </div>
             <MetricsChart versions={progress.versions} />
+            {progress.versions[progress.versions.length - 1]?.mapData?.selections?.length > 0 && (
+              <>
+                <p className="coaching-help-text">Map selections attached to the latest version:</p>
+                <div className="chip-row">
+                  {progress.versions[progress.versions.length - 1].mapData.selections.slice(-4).map((item: any) => (
+                    <span key={`${item.locationId}-${item.selectedAt}`} className="chip">
+                      {item.location?.name || item.locationId}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : (
@@ -238,7 +256,7 @@ export default function Coaching() {
         )}
       </div>
 
-      <CoachingMap />
+      <CoachingMap onSaved={refreshCoachingData} />
 
       <div className="card">
         <h3>Interview Questions</h3>

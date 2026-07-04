@@ -295,6 +295,80 @@ export async function coachingDiff(token: string, prev: number, curr: number) {
   return res.json()
 }
 
+export type CoachingMapLocation = {
+  id: string
+  name: string
+  type: 'mentor' | 'center'
+  roleTags: string[]
+  city: string
+  state: string
+  country: string
+  address: string
+  lat: number
+  lon: number
+  rating?: number
+  contact?: string
+  hours?: string
+  distanceKm?: number
+}
+
+export type CoachingMapSearchResult = {
+  center: { lat: number, lon: number } | null
+  filters: {
+    role: string
+    city: string
+    radiusKm: number | null
+  }
+  locations: CoachingMapLocation[]
+  savedSelections: Array<{
+    selectedAt: string
+    locationId: string
+    location: CoachingMapLocation
+    note?: string
+  }>
+}
+
+export async function coachingLocations(
+  token: string,
+  params: { role?: string, city?: string, radiusKm?: number, lat?: number, lon?: number }
+) {
+  const url = new URL(`${API_BASE}/coaching/locations`)
+  if (params.role) url.searchParams.set('role', params.role)
+  if (params.city) url.searchParams.set('city', params.city)
+  if (typeof params.radiusKm === 'number') url.searchParams.set('radiusKm', String(params.radiusKm))
+  if (typeof params.lat === 'number') url.searchParams.set('lat', String(params.lat))
+  if (typeof params.lon === 'number') url.searchParams.set('lon', String(params.lon))
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  if (!res.ok) throw new Error(`Map locations failed: ${res.status}`)
+  return res.json() as Promise<CoachingMapSearchResult>
+}
+
+export async function coachingSelectLocation(
+  token: string,
+  payload: { locationId: string, version?: number, note?: string }
+) {
+  const res = await fetch(`${API_BASE}/coaching/locations/select`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`Save location failed: ${res.status}`)
+  return res.json() as Promise<{
+    selection: {
+      selectedAt: string
+      locationId: string
+      location: CoachingMapLocation
+      note?: string
+    }
+    attachedVersion?: any
+  }>
+}
+
 export async function generateCoverLetter(token: string | null, payload: { resume: File, jobDescription: string }) {
   const form = new FormData()
   form.append('resume', payload.resume)

@@ -410,6 +410,20 @@ pre {
   margin-bottom: 16px;
 }
 
+.coaching-map-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.coaching-map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
 .coaching-map-frame {
   width: 100%;
   min-height: 360px;
@@ -440,6 +454,60 @@ pre {
   background: rgba(239, 68, 68, 0.1);
   color: var(--danger);
   font-size: 0.875rem;
+}
+
+.coaching-map-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.coaching-map-result {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-hover);
+  box-shadow: var(--shadow);
+}
+
+.coaching-map-result.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25), var(--shadow);
+}
+
+.coaching-map-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.coaching-map-result-head h4 {
+  margin: 0 0 4px;
+}
+
+.coaching-map-result-head p,
+.coaching-map-address {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.coaching-map-result-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.coaching-map-saved {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.coaching-map-saved h4 {
+  margin: 0 0 10px;
 }
 
 .interview-chat-log {
