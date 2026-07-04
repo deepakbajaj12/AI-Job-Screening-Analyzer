@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { coachingProgress, coachingStudyPack, coachingInterviewQuestions, coachingDiff, coachingSaveVersion, downloadCoachingReportPdf } from '../api/client'
 import MetricsChart from '../components/MetricsChart'
+import CoachingMap from '../components/CoachingMap'
 
 export default function Coaching() {
   const { token, user } = useAuth()
@@ -236,6 +237,8 @@ export default function Coaching() {
           <div>Generate by saving a version with JD.</div>
         )}
       </div>
+
+      <CoachingMap />
 
       <div className="card">
         <h3>Interview Questions</h3>
