@@ -310,11 +310,14 @@ export type CoachingMapLocation = {
   contact?: string
   hours?: string
   distanceKm?: number
+  score?: number
+  googleMapsUrl?: string
 }
 
 export type CoachingMapSearchResult = {
   center: { lat: number, lon: number } | null
   filters: {
+    location: string
     role: string
     city: string
     radiusKm: number | null
@@ -330,9 +333,10 @@ export type CoachingMapSearchResult = {
 
 export async function coachingLocations(
   token: string,
-  params: { role?: string, city?: string, radiusKm?: number, lat?: number, lon?: number }
+  params: { location?: string, role?: string, city?: string, radiusKm?: number, lat?: number, lon?: number }
 ) {
   const url = new URL(`${API_BASE}/coaching/locations`)
+  if (params.location) url.searchParams.set('location', params.location)
   if (params.role) url.searchParams.set('role', params.role)
   if (params.city) url.searchParams.set('city', params.city)
   if (typeof params.radiusKm === 'number') url.searchParams.set('radiusKm', String(params.radiusKm))

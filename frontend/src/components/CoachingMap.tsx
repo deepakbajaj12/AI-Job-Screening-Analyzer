@@ -35,13 +35,11 @@ function buildMapUrl(center: CoachingMapCoords) {
 export default function CoachingMap({ onSaved }: CoachingMapProps) {
   const { token } = useAuth()
   const [coords, setCoords] = useState<CoachingMapCoords | null>(null)
-  const [status, setStatus] = useState('Use your location to center the coaching map.')
+  const [status, setStatus] = useState('Type any location to see the top 5 coaching options.')
   const [searching, setSearching] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [role, setRole] = useState('Software Engineer')
-  const [city, setCity] = useState('')
-  const [radiusKm, setRadiusKm] = useState('250')
+  const [locationQuery, setLocationQuery] = useState('')
   const [locations, setLocations] = useState<CoachingMapLocation[]>([])
   const [savedSelections, setSavedSelections] = useState<CoachingMapSelection[]>([])
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
@@ -56,15 +54,18 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
       return
     }
 
+    if (!locationQuery.trim() && !centerOverride && !coords) {
+      setError('Type a location to search coaching options.')
+      return
+    }
+
     const centerToUse = centerOverride ?? coords
 
     setSearching(true)
     setError(null)
     try {
       const data = await coachingLocations(token, {
-        role: role.trim(),
-        city: city.trim(),
-        radiusKm: radiusKm ? Number(radiusKm) : undefined,
+        location: locationQuery.trim(),
         lat: centerToUse?.lat,
         lon: centerToUse?.lon,
       })
@@ -104,7 +105,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
           lon: position.coords.longitude,
         }
         setCoords(nextCoords)
-        setStatus('Map centered on your current location.')
+        setStatus('Map centered on your current location. Search to see the top 5 coaching options nearby.')
         void refreshLocations(nextCoords)
       },
       () => {
@@ -148,25 +149,19 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
       <div className="coaching-map-header">
         <div>
           <h3>Coaching Map</h3>
-          <p className="coaching-help-text">Search by role, city, or radius, then save a nearby mentor or coaching center to your coaching progress.</p>
+          <p className="coaching-help-text">Type any location to see the top 5 coaching centers or mentors, then open each one in Google Maps.</p>
         </div>
       </div>
 
       <div className="coaching-map-controls">
-        <label>Target Role
-          <input type="text" value={role} onChange={e => setRole(e.target.value)} placeholder="e.g. Software Engineer" />
-        </label>
-        <label>City
-          <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Bengaluru" />
-        </label>
-        <label>Radius (km)
-          <input type="number" min="5" max="2000" value={radiusKm} onChange={e => setRadiusKm(e.target.value)} />
+        <label>Location
+          <input type="text" value={locationQuery} onChange={e => setLocationQuery(e.target.value)} placeholder="e.g. Delhi, Pune, Hyderabad, or any place" />
         </label>
         <div className="coaching-map-actions">
           <button className="btn" onClick={useCurrentLocation} disabled={searching}>
             {searching ? 'Locating...' : 'Use My Location'}
           </button>
-          <button className="btn secondary" onClick={refreshLocations} disabled={searching || !token}>
+          <button className="btn secondary" onClick={() => refreshLocations()} disabled={searching || !token}>
             {searching ? 'Searching...' : 'Search Locations'}
           </button>
         </div>
@@ -206,8 +201,12 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
                 {(location.roleTags || []).slice(0, 4).map(tag => <span key={tag} className="chip">{tag}</span>)}
                 {typeof location.distanceKm === 'number' && <span className="chip">{location.distanceKm.toFixed(1)} km</span>}
                 {typeof location.rating === 'number' && <span className="chip">{location.rating.toFixed(1)} ★</span>}
+                {typeof location.score === 'number' && <span className="chip">Score {location.score.toFixed(0)}</span>}
               </div>
               <div className="coaching-map-result-actions">
+                <a className="btn secondary" href={location.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${location.name}, ${location.address}, ${location.city}`)}`} target="_blank" rel="noreferrer">
+                  Open in Google Maps
+                </a>
                 <button className="btn" onClick={() => saveLocation(location)} disabled={savingId === location.id}>
                   {savingId === location.id ? 'Saving...' : 'Save to Progress'}
                 </button>

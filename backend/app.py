@@ -528,6 +528,53 @@ def _location_matches_filters(location, role=None, city=None):
 
     return True
 
+def _build_google_maps_url(location, query_text=""):
+    parts = [location.get("name"), location.get("address"), location.get("city"), location.get("state"), location.get("country")]
+    if query_text:
+      parts.insert(0, query_text)
+    query = ", ".join([part for part in parts if part])
+    return f"https://www.google.com/maps/search/?api=1&query={requests.utils.quote(query)}"
+
+def _score_location_for_query(location, query_text="", role_text=""):
+    query_value = _normalize_text(query_text)
+    role_value = _normalize_text(role_text)
+    haystack = " ".join([
+        _normalize_text(location.get("name")),
+        _normalize_text(location.get("address")),
+        _normalize_text(location.get("city")),
+        _normalize_text(location.get("state")),
+        _normalize_text(location.get("country")),
+        " ".join(_normalize_text(tag) for tag in location.get("roleTags", [])),
+    ])
+
+    score = float(location.get("rating", 0) or 0)
+    if query_value:
+        if query_value == _normalize_text(location.get("city")):
+            score += 120
+        elif query_value in _normalize_text(location.get("name")):
+            score += 90
+        elif query_value in _normalize_text(location.get("address")):
+            score += 80
+        elif query_value in _normalize_text(location.get("state")):
+            score += 70
+        elif query_value in _normalize_text(location.get("country")):
+            score += 60
+        elif query_value in haystack:
+            score += 40
+        else:
+            # Soft fallback so any typed place still returns the best 5 by broad similarity.
+            overlap = set(query_value.split()) & set(haystack.split())
+            score += len(overlap) * 5
+
+    if role_value:
+        role_tags = [_normalize_text(tag) for tag in location.get("roleTags", [])]
+        if role_value in role_tags:
+            score += 25
+        elif any(role_value in tag or tag in role_value for tag in role_tags):
+            score += 15
+
+    return score
+
 def _attach_map_selection_to_version(user_id, selection_record, version_number=None):
     with _versions_lock:
         store = _read_versions_store()
@@ -2598,6 +2645,7 @@ def coaching_diff(user_info):
 @auth_required
 def coaching_locations(user_info):
     user_id = user_info.get('uid')
+    query_text = request.args.get('location', '').strip() or request.args.get('city', '').strip()
     role = request.args.get('role', '').strip()
     city = request.args.get('city', '').strip()
     radius_km = _parse_float(request.args.get('radiusKm'))
@@ -2625,12 +2673,16 @@ def coaching_locations(user_info):
             enriched['distanceKm'] = round(distance_km, 1)
             if radius_km is not None and distance_km > radius_km:
                 continue
+        enriched['score'] = round(_score_location_for_query(location, query_text=query_text, role_text=role), 2)
+        enriched['googleMapsUrl'] = _build_google_maps_url(location, query_text=query_text)
         locations.append(enriched)
 
     if center:
-        locations.sort(key=lambda item: (item.get('distanceKm', 999999.0), -float(item.get('rating', 0) or 0)))
+        locations.sort(key=lambda item: (item.get('distanceKm', 999999.0), -float(item.get('score', 0) or 0), -float(item.get('rating', 0) or 0)))
     else:
-        locations.sort(key=lambda item: (-float(item.get('rating', 0) or 0), item.get('city', '')))
+        locations.sort(key=lambda item: (-float(item.get('score', 0) or 0), -float(item.get('rating', 0) or 0), item.get('city', '')))
+
+    locations = locations[:5]
 
     selections_store = _read_map_selections_store()
     saved_selections = selections_store.get(user_id, [])[-10:]
@@ -2645,6 +2697,7 @@ def coaching_locations(user_info):
     return jsonify({
         'center': center,
         'filters': {
+            'location': query_text,
             'role': role,
             'city': city,
             'radiusKm': radius_km,
