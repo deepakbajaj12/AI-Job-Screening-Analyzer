@@ -67,9 +67,17 @@ export default function CoachingMap({ role, onSaved }: CoachingMapProps) {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [locationQuery, setLocationQuery] = useState('')
+  const [mapRole, setMapRole] = useState(role || 'Software Engineer')
   const [locations, setLocations] = useState<CoachingMapLocation[]>([])
   const [savedSelections, setSavedSelections] = useState<CoachingMapSelection[]>([])
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (role) {
+      setMapRole(role)
+    }
+  }, [role])
+
 
   const activeCenter = coords ?? DEFAULT_CENTER
 
@@ -93,7 +101,7 @@ export default function CoachingMap({ role, onSaved }: CoachingMapProps) {
     try {
       const data = await coachingLocations(token, {
         location: locationQuery.trim(),
-        role: role,
+        role: mapRole,
         lat: centerToUse?.lat,
         lon: centerToUse?.lon,
       })
@@ -114,7 +122,8 @@ export default function CoachingMap({ role, onSaved }: CoachingMapProps) {
     if (!token) return
     void refreshLocations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, role])
+  }, [token, mapRole])
+
 
 
   const useCurrentLocation = () => {
@@ -186,6 +195,9 @@ export default function CoachingMap({ role, onSaved }: CoachingMapProps) {
         <label>Location
           <input type="text" value={locationQuery} onChange={e => setLocationQuery(e.target.value)} placeholder="e.g. Delhi, Pune, Hyderabad, or any place" />
         </label>
+        <label>Target Role
+          <input type="text" value={mapRole} onChange={e => setMapRole(e.target.value)} placeholder="e.g. Software Engineer, Accountant" />
+        </label>
         <div className="coaching-map-actions">
           <button className="btn" onClick={useCurrentLocation} disabled={searching}>
             {searching ? 'Locating...' : 'Use My Location'}
@@ -195,6 +207,7 @@ export default function CoachingMap({ role, onSaved }: CoachingMapProps) {
           </button>
         </div>
       </div>
+
 
       <div className="coaching-map-meta">
         <span className="chip">Lat: {activeCenter.lat.toFixed(4)}</span>
