@@ -32,6 +32,19 @@ function buildMapUrl(center: CoachingMapCoords) {
   return `https://www.openstreetmap.org/export/embed.html?bbox=${minLon}%2C${minLat}%2C${maxLon}%2C${maxLat}&layer=mapnik&marker=${center.lat}%2C${center.lon}`
 }
 
+function buildGoogleMapsUrl(locationQuery: string, center: CoachingMapCoords | null) {
+  const query = locationQuery.trim()
+  if (query) {
+    return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
+  }
+
+  if (center) {
+    return `https://www.google.com/maps?q=${center.lat},${center.lon}&output=embed`
+  }
+
+  return 'https://www.google.com/maps?q=coaching&output=embed'
+}
+
 export default function CoachingMap({ onSaved }: CoachingMapProps) {
   const { token } = useAuth()
   const [coords, setCoords] = useState<CoachingMapCoords | null>(null)
@@ -46,7 +59,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
 
   const activeCenter = coords ?? (locations[0] ? { lat: locations[0].lat, lon: locations[0].lon } : DEFAULT_CENTER)
 
-  const mapUrl = useMemo(() => buildMapUrl(activeCenter), [activeCenter])
+  const mapUrl = useMemo(() => buildGoogleMapsUrl(locationQuery, activeCenter), [locationQuery, activeCenter])
 
   const refreshLocations = async (centerOverride?: CoachingMapCoords | null) => {
     if (!token) {
@@ -175,7 +188,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
 
       <div className="coaching-map-frame">
         <iframe
-          title="Coaching map"
+          title="Coaching map search"
           src={mapUrl}
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
