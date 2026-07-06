@@ -57,7 +57,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
   const [savedSelections, setSavedSelections] = useState<CoachingMapSelection[]>([])
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
 
-  const activeCenter = coords ?? (locations[0] ? { lat: locations[0].lat, lon: locations[0].lon } : DEFAULT_CENTER)
+  const activeCenter = coords ?? DEFAULT_CENTER
 
   const mapUrl = useMemo(() => buildGoogleMapsUrl(locationQuery, activeCenter), [locationQuery, activeCenter])
 
@@ -144,7 +144,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
     setSavingId(location.id)
     setError(null)
     try {
-      const saved = await coachingSelectLocation(token, { locationId: location.id })
+      const saved = await coachingSelectLocation(token, { locationId: location.id, location })
       setSelectedLocationId(location.id)
       const savedSelection = saved.selection
       setSavedSelections(prev => [savedSelection, ...prev.filter(item => item.locationId !== savedSelection.locationId)])

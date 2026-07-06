@@ -351,7 +351,7 @@ export async function coachingLocations(
 
 export async function coachingSelectLocation(
   token: string,
-  payload: { locationId: string, version?: number, note?: string }
+  payload: { locationId: string, location: CoachingMapLocation, version?: number, note?: string }
 ) {
   const res = await fetch(`${API_BASE}/coaching/locations/select`, {
     method: 'POST',

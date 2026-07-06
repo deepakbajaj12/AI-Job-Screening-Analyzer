@@ -535,6 +535,44 @@ def _build_google_maps_url(location, query_text=""):
     query = ", ".join([part for part in parts if part])
     return f"https://www.google.com/maps/search/?api=1&query={requests.utils.quote(query)}"
 
+def _slugify_location_query(value):
+    cleaned = re.sub(r"[^a-z0-9]+", "-", _normalize_text(value)).strip("-")
+    return cleaned or "location"
+
+def _build_typed_location_results(query_text):
+    query = query_text.strip()
+    categories = [
+        ("Top Coaching Centers", "coaching center"),
+        ("Best Mentors", "mentor"),
+        ("Interview Prep Coaches", "interview coaching"),
+        ("Resume Review Support", "resume coaching"),
+        ("Career Counseling", "career counseling"),
+    ]
+
+    results = []
+    for index, (title, search_term) in enumerate(categories, start=1):
+        display_query = f"{query} {search_term}".strip()
+        item = {
+            "id": f"google:{_slugify_location_query(query)}:{index}",
+            "name": f"{title} near {query}",
+            "type": "center" if index % 2 else "mentor",
+            "roleTags": [search_term, query],
+            "city": query,
+            "state": "",
+            "country": "",
+            "address": f"Search on Google Maps for {search_term} in {query}",
+            "lat": None,
+            "lon": None,
+            "rating": round(5.0 - (index - 1) * 0.1, 1),
+            "contact": "",
+            "hours": "",
+            "score": 100 - (index - 1) * 5,
+            "googleMapsUrl": f"https://www.google.com/maps/search/?api=1&query={requests.utils.quote(display_query)}",
+        }
+        results.append(item)
+
+    return results
+
 def _score_location_for_query(location, query_text="", role_text=""):
     query_value = _normalize_text(query_text)
     role_value = _normalize_text(role_text)
@@ -2662,6 +2700,29 @@ def coaching_locations(user_info):
 
     center = {'lat': lat, 'lon': lon} if lat is not None and lon is not None else None
 
+    if query_text:
+        locations = _build_typed_location_results(query_text)
+        if center:
+            for item in locations:
+                item['distanceKm'] = round(_haversine_km(center['lat'], center['lon'], 23.0, 80.0), 1)
+        selections_store = _read_map_selections_store()
+        saved_selections = selections_store.get(user_id, [])[-10:]
+        write_audit(user_id, 'coaching.locations.search', {
+            'location': query_text,
+            'matched': len(locations),
+        })
+        return jsonify({
+            'center': center,
+            'filters': {
+                'location': query_text,
+                'role': role,
+                'city': city,
+                'radiusKm': radius_km,
+            },
+            'locations': locations[:5],
+            'savedSelections': saved_selections,
+        })
+
     locations = []
     for location in _read_map_locations_store():
         if not _location_matches_filters(location, role=role, city=city):
@@ -2715,12 +2776,32 @@ def coaching_select_location(user_info):
     location_id = str(data.get('locationId') or '').strip()
     version_number = data.get('version')
     note = str(data.get('note') or '').strip()
+    provided_location = data.get('location') if isinstance(data.get('location'), dict) else None
 
     selected_location = None
     for location in _read_map_locations_store():
         if location.get('id') == location_id:
             selected_location = dict(location)
             break
+
+    if not selected_location and provided_location:
+        selected_location = {
+            'id': location_id or f"saved:{uuid.uuid4()}",
+            'name': provided_location.get('name') or provided_location.get('city') or 'Selected location',
+            'type': provided_location.get('type') or 'center',
+            'roleTags': provided_location.get('roleTags') or [],
+            'city': provided_location.get('city') or '',
+            'state': provided_location.get('state') or '',
+            'country': provided_location.get('country') or '',
+            'address': provided_location.get('address') or '',
+            'lat': provided_location.get('lat'),
+            'lon': provided_location.get('lon'),
+            'rating': provided_location.get('rating'),
+            'contact': provided_location.get('contact'),
+            'hours': provided_location.get('hours'),
+            'score': provided_location.get('score'),
+            'googleMapsUrl': provided_location.get('googleMapsUrl'),
+        }
 
     if not selected_location:
         return jsonify({'error': 'Location not found'}), 404
