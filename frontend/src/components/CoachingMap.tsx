@@ -20,8 +20,10 @@ type CoachingMapSelection = {
 }
 
 type CoachingMapProps = {
+  role?: string
   onSaved?: () => void | Promise<void>
 }
+
 
 // Read API key from Vite env — set VITE_GOOGLE_MAPS_API_KEY in frontend/.env
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
@@ -57,7 +59,7 @@ function buildEmbedUrl(locationQuery: string, center: CoachingMapCoords | null):
   return 'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik'
 }
 
-export default function CoachingMap({ onSaved }: CoachingMapProps) {
+export default function CoachingMap({ role, onSaved }: CoachingMapProps) {
   const { token } = useAuth()
   const [coords, setCoords] = useState<CoachingMapCoords | null>(null)
   const [status, setStatus] = useState('Type any location to see the top 5 coaching options.')
@@ -91,6 +93,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
     try {
       const data = await coachingLocations(token, {
         location: locationQuery.trim(),
+        role: role,
         lat: centerToUse?.lat,
         lon: centerToUse?.lon,
       })
@@ -111,7 +114,8 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
     if (!token) return
     void refreshLocations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [token, role])
+
 
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {

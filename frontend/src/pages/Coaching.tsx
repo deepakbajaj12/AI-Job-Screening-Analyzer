@@ -256,7 +256,7 @@ export default function Coaching() {
         )}
       </div>
 
-      <CoachingMap onSaved={refreshCoachingData} />
+      <CoachingMap role={role} onSaved={refreshCoachingData} />
 
       <div className="card">
         <h3>Interview Questions</h3>

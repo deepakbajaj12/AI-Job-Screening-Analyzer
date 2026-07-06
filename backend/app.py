@@ -642,7 +642,7 @@ _EXCLUDE_KEYWORDS = frozenset([
 ])
 
 
-def _is_job_coaching_relevant(name: str) -> bool:
+def _is_job_coaching_relevant(name: str, role: str = None) -> bool:
     """Return True if the place name looks like a job/career coaching center.
     Excludes hospitals, medical colleges, agricultural institutes, sports academies, etc.
     """
@@ -651,7 +651,17 @@ def _is_job_coaching_relevant(name: str) -> bool:
     if has_exclude_kw:
         return False
         
-    has_job_kw = any(kw in name_lower for kw in _JOB_COACHING_KEYWORDS)
+    job_kws = set(_JOB_COACHING_KEYWORDS)
+    if role:
+        role_words = [w for w in role.lower().split() if len(w) > 2]
+        for w in role_words:
+            job_kws.add(w)
+            if w in ("software", "engineer", "developer", "coding", "programmer", "computer", "system"):
+                job_kws.update(["computer", "coding", "programming", "software", "it training", "tech", "technology", "network"])
+            elif w in ("finance", "accountant", "banking", "mba", "business"):
+                job_kws.update(["finance", "financial", "accounts", "accounting", "tally", "taxation", "banking"])
+
+    has_job_kw = any(kw in name_lower for kw in job_kws)
     has_non_job_kw = any(kw in name_lower for kw in _NON_JOB_KEYWORDS)
     # Accept if has job keyword (even if also has non-job word, e.g. "HR Hospital Training")
     if has_job_kw:
@@ -665,7 +675,8 @@ def _is_job_coaching_relevant(name: str) -> bool:
 
 
 
-def _search_coaching_foursquare(query_text, lat, lon, radius_m=8000):
+
+def _search_coaching_foursquare(query_text, lat, lon, radius_m=8000, role=None):
     """Search Foursquare Places API for real job coaching centers near (lat, lon).
     Requires FOURSQUARE_API_KEY env var (free at location.foursquare.com/developer).
     Free tier: 10,000 calls total (no daily limit).
@@ -681,6 +692,12 @@ def _search_coaching_foursquare(query_text, lat, lon, radius_m=8000):
         "interview training",
         "job training institute",
     ]
+    if role:
+        # Prioritize searching for role-specific training centers
+        role_words = [w for w in role.lower().split() if len(w) > 2]
+        for w in role_words[:2]:
+            job_queries.insert(0, f"{w} coaching")
+            job_queries.insert(0, f"{w} training")
 
     all_results = []
     seen_ids = set()
@@ -721,7 +738,7 @@ def _search_coaching_foursquare(query_text, lat, lon, radius_m=8000):
     return all_results
 
 
-def _build_foursquare_coaching_results(places, center_lat, center_lon):
+def _build_foursquare_coaching_results(places, center_lat, center_lon, role=None):
     """Convert Foursquare Places API results into job-coaching CoachingMapLocation dicts."""
     seen = set()
     results = []
@@ -729,9 +746,10 @@ def _build_foursquare_coaching_results(places, center_lat, center_lon):
         name = (place.get("name") or "").strip()
         if not name or name.lower() in seen:
             continue
-        if not _is_job_coaching_relevant(name):
+        if not _is_job_coaching_relevant(name, role):
             continue
         seen.add(name.lower())
+
 
         geocodes = place.get("geocodes", {}).get("main", {})
         el_lat = geocodes.get("latitude")
@@ -844,7 +862,7 @@ def _search_coaching_osm(lat, lon, radius_m=8000):
     return []
 
 
-def _search_coaching_nominatim(query_text, lat, lon):
+def _search_coaching_nominatim(query_text, lat, lon, role=None):
     """Search Nominatim for job coaching/placement/career places near a location.
     Uses bounding-box search with job-specific keywords. Free, no key needed.
     """
@@ -858,10 +876,15 @@ def _search_coaching_nominatim(query_text, lat, lon):
         "classes",
         "academy",
     ]
+    if role:
+        role_words = [w for w in role.lower().split() if len(w) > 2]
+        for w in role_words[:2]:
+            keywords.insert(0, w)
+
     all_results = []
     seen_ids = set()
     headers = {"User-Agent": "AI-Job-Screening-Analyzer/1.0"}
-    for kw in keywords[:4]:  # limit to 4 keyword calls
+    for kw in keywords[:5]:  # limit to 5 keyword calls
         try:
             url = (
                 "https://nominatim.openstreetmap.org/search"
@@ -880,7 +903,7 @@ def _search_coaching_nominatim(query_text, lat, lon):
     return all_results
 
 
-def _build_nominatim_coaching_results(items, center_lat, center_lon):
+def _build_nominatim_coaching_results(items, center_lat, center_lon, role=None):
     """Convert Nominatim search results into job-coaching CoachingMapLocation dicts."""
     seen = set()
     results = []
@@ -889,9 +912,10 @@ def _build_nominatim_coaching_results(items, center_lat, center_lon):
         if not name or name.lower() in seen:
             continue
         # Filter: only job/career coaching relevant places
-        if not _is_job_coaching_relevant(name):
+        if not _is_job_coaching_relevant(name, role):
             continue
         seen.add(name.lower())
+
 
         try:
             el_lat = float(item["lat"])
@@ -938,7 +962,7 @@ def _build_nominatim_coaching_results(items, center_lat, center_lon):
     return results[:5]
 
 
-def _build_osm_coaching_results(elements, center_lat, center_lon):
+def _build_osm_coaching_results(elements, center_lat, center_lon, role=None):
     """Convert raw Overpass API elements into job-coaching CoachingMapLocation dicts.
     Filters to job/career/placement relevant places only.
     Returns up to 5 results sorted by distance.
@@ -951,9 +975,10 @@ def _build_osm_coaching_results(elements, center_lat, center_lon):
         if not name or name.lower() in seen:
             continue
         # Filter: only job/career coaching relevant places
-        if not _is_job_coaching_relevant(name):
+        if not _is_job_coaching_relevant(name, role):
             continue
         seen.add(name.lower())
+
 
         el_lat = el.get("lat") or (el.get("center") or {}).get("lat")
         el_lon = el.get("lon") or (el.get("center") or {}).get("lon")
@@ -3101,28 +3126,56 @@ def coaching_locations(user_info):
 
         # Tier 2a: Foursquare Places API — real business data (needs FOURSQUARE_API_KEY)
         if geo_lat is not None:
-            fsq_places = _search_coaching_foursquare(query_text, geo_lat, geo_lon, radius_m=8000)
-            locations = _build_foursquare_coaching_results(fsq_places, geo_lat, geo_lon)
+            fsq_places = _search_coaching_foursquare(query_text, geo_lat, geo_lon, radius_m=8000, role=role)
+            locations = _build_foursquare_coaching_results(fsq_places, geo_lat, geo_lon, role=role)
             if locations:
                 source = 'foursquare'
 
         # Tier 2b: Overpass API — OpenStreetMap real nodes (free, no key)
         if not locations and geo_lat is not None:
             osm_elements = _search_coaching_osm(geo_lat, geo_lon, radius_m=8000)
-            locations = _build_osm_coaching_results(osm_elements, geo_lat, geo_lon)
+            locations = _build_osm_coaching_results(osm_elements, geo_lat, geo_lon, role=role)
             if locations:
                 source = 'overpass'
 
         # Tier 2c: Nominatim keyword search (reliable free fallback)
         if not locations and geo_lat is not None:
-            nom_items = _search_coaching_nominatim(query_text, geo_lat, geo_lon)
-            locations = _build_nominatim_coaching_results(nom_items, geo_lat, geo_lon)
+            nom_items = _search_coaching_nominatim(query_text, geo_lat, geo_lon, role=role)
+            locations = _build_nominatim_coaching_results(nom_items, geo_lat, geo_lon, role=role)
             if locations:
                 source = 'nominatim'
 
         # Tier 3: Google Maps search link tiles (final fallback — always returns 5)
         if not locations:
             locations = _build_typed_location_results(query_text)
+
+        # Re-rank results if user target role is provided
+        if role and locations and source != 'fallback':
+            role_lower = role.lower()
+            role_words = [w for w in role_lower.split() if len(w) > 2]
+            for loc in locations:
+                role_score = 0
+                name_lower = loc.get('name', '').lower()
+                # Check direct match of role keywords
+                for word in role_words:
+                    if word in name_lower:
+                        role_score += 40
+                    # Check in roleTags
+                    for tag in loc.get('roleTags', []):
+                        if word in tag.lower():
+                            role_score += 20
+                # Add role score to existing base score
+                loc['score'] = round(loc.get('score', 0.0) + role_score, 1)
+                
+                # Append matching role tags for clarity
+                for word in role_words:
+                    if word in name_lower:
+                        matched_tag = f"{word.capitalize()} Training"
+                        if matched_tag not in loc.get('roleTags', []):
+                            loc['roleTags'].append(matched_tag)
+                            
+            # Sort by score in descending order
+            locations.sort(key=lambda x: x.get('score', 0.0), reverse=True)
 
         selections_store = _read_map_selections_store()
         saved_selections = selections_store.get(user_id, [])[-10:]
@@ -3142,6 +3195,7 @@ def coaching_locations(user_info):
             'locations': locations[:5],
             'savedSelections': saved_selections,
         })
+
 
 
     locations = []
