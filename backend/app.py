@@ -539,16 +539,26 @@ def _slugify_location_query(value):
     cleaned = re.sub(r"[^a-z0-9]+", "-", _normalize_text(value)).strip("-")
     return cleaned or "location"
 
-def _build_typed_location_results(query_text):
+def _build_typed_location_results(query_text, role=None):
     """Fallback: builds 5 job-related coaching search tiles with Google Maps links."""
     query = query_text.strip()
-    categories = [
-        ("Job Interview Coaching", "job interview coaching"),
-        ("Placement Training Centers", "placement training center"),
-        ("Career Counseling & Guidance", "career counseling"),
-        ("Soft Skills & Communication Training", "soft skills training"),
-        ("Resume & Mock Interview Prep", "resume interview preparation"),
-    ]
+    if role:
+        role_title = role.strip().title()
+        categories = [
+            (f"{role_title} Placement Coaching", f"{role} placement coaching"),
+            (f"{role_title} Skills Training", f"{role} training center"),
+            ("Career Counseling & Guidance", "career counseling"),
+            ("Soft Skills & Interview Prep", "soft skills training"),
+            ("Resume & Mock Interview Prep", "resume interview preparation"),
+        ]
+    else:
+        categories = [
+            ("Job Interview Coaching", "job interview coaching"),
+            ("Placement Training Centers", "placement training center"),
+            ("Career Counseling & Guidance", "career counseling"),
+            ("Soft Skills & Communication Training", "soft skills training"),
+            ("Resume & Mock Interview Prep", "resume interview preparation"),
+        ]
 
     results = []
     for index, (title, search_term) in enumerate(categories, start=1):
@@ -573,6 +583,7 @@ def _build_typed_location_results(query_text):
         results.append(item)
 
     return results
+
 
 def _score_location_for_query(location, query_text="", role_text=""):
     query_value = _normalize_text(query_text)
@@ -639,7 +650,12 @@ _EXCLUDE_KEYWORDS = frozenset([
     "badminton", "basketball", "yoga", "gym", "fitness", "cooking", "driving",
     "acting", "modeling", "painting", "drawing", "singing", "art class", "art school",
     "martial arts", "karate", "taekwondo", "kung fu",
+    "physical training", "physical education", "police training", "defence academy",
+    "defense academy", "army training", "military training", "driving school",
+    "jee", "neet", "ielts", "toefl", "entrance exam", "grades 8th", "grades 9th", "grades 10th",
+    "school coaching", "admission coaching",
 ])
+
 
 
 def _is_job_coaching_relevant(name: str, role: str = None) -> bool:
@@ -651,27 +667,51 @@ def _is_job_coaching_relevant(name: str, role: str = None) -> bool:
     if has_exclude_kw:
         return False
         
-    job_kws = set(_JOB_COACHING_KEYWORDS)
-    if role:
-        role_words = [w for w in role.lower().split() if len(w) > 2]
-        for w in role_words:
-            job_kws.add(w)
-            if w in ("software", "engineer", "developer", "coding", "programmer", "computer", "system"):
-                job_kws.update(["computer", "coding", "programming", "software", "it training", "tech", "technology", "network"])
-            elif w in ("finance", "accountant", "banking", "mba", "business"):
-                job_kws.update(["finance", "financial", "accounts", "accounting", "tally", "taxation", "banking"])
-
-    has_job_kw = any(kw in name_lower for kw in job_kws)
     has_non_job_kw = any(kw in name_lower for kw in _NON_JOB_KEYWORDS)
-    # Accept if has job keyword (even if also has non-job word, e.g. "HR Hospital Training")
-    if has_job_kw:
-        return True
-    # Reject if explicitly non-job and no job keyword
     if has_non_job_kw:
         return False
-    # For generic names ("Institute", "Academy") allow — better to include than exclude
-    generic_ok = any(kw in name_lower for kw in ("institute", "academy", "centre", "center", "classes"))
-    return generic_ok
+
+    # Cross-domain exclusions:
+    # If a role is provided, filter out other domains (e.g. software terms if search is for business/finance)
+    if role:
+        software_terms = ("software", "computer", "coding", "programming", "java", "python", "web dev", "hadoop", "it training", "networking", "cyber", "cloud")
+        finance_terms = ("accounts", "accounting", "finance", "tally", "taxation", "banking", "commerce", "chartered")
+        
+        is_software_role = any(w in role.lower() for w in ("software", "developer", "coding", "programmer", "engineer", "computer", "system", "it"))
+        is_finance_role = any(w in role.lower() for w in ("finance", "accountant", "banking", "mba", "business", "commerce"))
+        
+        if not is_software_role and any(term in name_lower for term in software_terms):
+            return False
+        if not is_finance_role and any(term in name_lower for term in finance_terms):
+            return False
+
+    # Check for general career/job guidance keywords
+    has_general_career_kw = any(kw in name_lower for kw in _JOB_COACHING_KEYWORDS)
+    if has_general_career_kw:
+        return True
+
+    # If role is specified, check if name matches role-specific domain keywords
+    if role:
+        role_kws = set([w for w in role.lower().split() if len(w) > 2])
+        for w in list(role_kws):
+            if w in ("software", "engineer", "developer", "coding", "programmer", "computer", "system"):
+                role_kws.update(["computer", "coding", "programming", "software", "it training", "tech", "technology", "network", "developer", "engineer"])
+            elif w in ("finance", "accountant", "banking", "mba", "business", "commerce"):
+                role_kws.update(["finance", "financial", "accounts", "accounting", "tally", "taxation", "banking", "commerce", "chartered", "management"])
+        
+        has_role_kw = any(kw in name_lower for kw in role_kws)
+        if has_role_kw:
+            return True
+
+    # If no role or doesn't match role, only allow generic names if we don't have a role filter.
+    # If a role is specified, we want to be strict and NOT allow generic unrelated institutes.
+    if not role:
+        generic_ok = any(kw in name_lower for kw in ("institute", "academy", "centre", "center", "classes", "coaching", "training"))
+        return generic_ok
+        
+    return False
+
+
 
 
 
@@ -3147,7 +3187,8 @@ def coaching_locations(user_info):
 
         # Tier 3: Google Maps search link tiles (final fallback — always returns 5)
         if not locations:
-            locations = _build_typed_location_results(query_text)
+            locations = _build_typed_location_results(query_text, role=role)
+
 
         # Re-rank results if user target role is provided
         if role and locations and source != 'fallback':
