@@ -540,13 +540,14 @@ def _slugify_location_query(value):
     return cleaned or "location"
 
 def _build_typed_location_results(query_text):
+    """Fallback: builds 5 job-related coaching search tiles with Google Maps links."""
     query = query_text.strip()
     categories = [
-        ("Top Coaching Centers", "coaching center"),
-        ("Best Mentors", "mentor"),
-        ("Interview Prep Coaches", "interview coaching"),
-        ("Resume Review Support", "resume coaching"),
-        ("Career Counseling", "career counseling"),
+        ("Job Interview Coaching", "job interview coaching"),
+        ("Placement Training Centers", "placement training center"),
+        ("Career Counseling & Guidance", "career counseling"),
+        ("Soft Skills & Communication Training", "soft skills training"),
+        ("Resume & Mock Interview Prep", "resume interview preparation"),
     ]
 
     results = []
@@ -556,11 +557,11 @@ def _build_typed_location_results(query_text):
             "id": f"google:{_slugify_location_query(query)}:{index}",
             "name": f"{title} near {query}",
             "type": "center" if index % 2 else "mentor",
-            "roleTags": [search_term, query],
+            "roleTags": [search_term, "job coaching", query],
             "city": query,
             "state": "",
             "country": "",
-            "address": f"Search on Google Maps for {search_term} in {query}",
+            "address": f"Search Google Maps for {search_term} in {query}",
             "lat": None,
             "lon": None,
             "rating": round(5.0 - (index - 1) * 0.1, 1),
@@ -612,6 +613,395 @@ def _score_location_for_query(location, query_text="", role_text=""):
             score += 15
 
     return score
+
+
+# ── Job coaching relevance helpers ────────────────────────────────────────────
+
+# Keywords that indicate a place IS job / career / placement related
+_JOB_COACHING_KEYWORDS = frozenset([
+    "coaching", "placement", "interview", "career", "soft skill", "soft-skill",
+    "personality", "aptitude", "resume", "cv", "communication", "training",
+    "spoken english", "english speaking", "hr", "employability", "job",
+    "corporate", "campus", "recruitment", "mentor", "prep", "preparation",
+    "skill", "mock", "gd", "group discussion", "personality development",
+])
+
+# Keywords that strongly indicate a non-job institution (exclude unless also job-tagged)
+_NON_JOB_KEYWORDS = frozenset([
+    "hospital", "medical", "dental", "aiims", "agriculture", "agricultural",
+    "pharmacy", "nursing", "veterinary", "polytechnic", "iit", "nit",
+    "university", "school of medicine", "law school",
+])
+
+# Keywords that are strictly not career/job related (sports, music, etc.)
+_EXCLUDE_KEYWORDS = frozenset([
+    "sports", "tennis", "cricket", "football", "music", "dance", "swimming", 
+    "badminton", "basketball", "yoga", "gym", "fitness", "cooking", "driving",
+    "acting", "modeling", "painting", "drawing", "singing", "art class", "art school",
+    "martial arts", "karate", "taekwondo", "kung fu",
+])
+
+
+def _is_job_coaching_relevant(name: str) -> bool:
+    """Return True if the place name looks like a job/career coaching center.
+    Excludes hospitals, medical colleges, agricultural institutes, sports academies, etc.
+    """
+    name_lower = name.lower()
+    has_exclude_kw = any(kw in name_lower for kw in _EXCLUDE_KEYWORDS)
+    if has_exclude_kw:
+        return False
+        
+    has_job_kw = any(kw in name_lower for kw in _JOB_COACHING_KEYWORDS)
+    has_non_job_kw = any(kw in name_lower for kw in _NON_JOB_KEYWORDS)
+    # Accept if has job keyword (even if also has non-job word, e.g. "HR Hospital Training")
+    if has_job_kw:
+        return True
+    # Reject if explicitly non-job and no job keyword
+    if has_non_job_kw:
+        return False
+    # For generic names ("Institute", "Academy") allow — better to include than exclude
+    generic_ok = any(kw in name_lower for kw in ("institute", "academy", "centre", "center", "classes"))
+    return generic_ok
+
+
+
+def _search_coaching_foursquare(query_text, lat, lon, radius_m=8000):
+    """Search Foursquare Places API for real job coaching centers near (lat, lon).
+    Requires FOURSQUARE_API_KEY env var (free at location.foursquare.com/developer).
+    Free tier: 10,000 calls total (no daily limit).
+    Returns list of Foursquare place dicts.
+    """
+    api_key = os.environ.get("FOURSQUARE_API_KEY", "").strip()
+    if not api_key:
+        return []
+
+    job_queries = [
+        "placement coaching",
+        "career coaching",
+        "interview training",
+        "job training institute",
+    ]
+
+    all_results = []
+    seen_ids = set()
+    headers = {
+        "Authorization": api_key,
+        "Accept": "application/json",
+    }
+
+    for q in job_queries[:3]:  # max 3 queries to stay within free tier
+        try:
+            params = {
+                "query": q,
+                "ll": f"{lat},{lon}",
+                "radius": radius_m,
+                "limit": 10,
+                "fields": "fsq_id,name,location,geocodes,distance,categories",
+            }
+            resp = requests.get(
+                "https://api.foursquare.com/v3/places/search",
+                headers=headers,
+                params=params,
+                timeout=8,
+            )
+            if resp.status_code == 401:
+                logger.warning("foursquare.invalid_api_key")
+                break
+            if resp.status_code != 200:
+                logger.warning(f"foursquare.http_error status={resp.status_code}")
+                break
+            for place in resp.json().get("results", []):
+                fsq_id = place.get("fsq_id")
+                if fsq_id and fsq_id not in seen_ids:
+                    seen_ids.add(fsq_id)
+                    all_results.append(place)
+        except Exception as exc:
+            logger.warning(f"foursquare.error query={q!r} error={exc}")
+
+    return all_results
+
+
+def _build_foursquare_coaching_results(places, center_lat, center_lon):
+    """Convert Foursquare Places API results into job-coaching CoachingMapLocation dicts."""
+    seen = set()
+    results = []
+    for place in places:
+        name = (place.get("name") or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        if not _is_job_coaching_relevant(name):
+            continue
+        seen.add(name.lower())
+
+        geocodes = place.get("geocodes", {}).get("main", {})
+        el_lat = geocodes.get("latitude")
+        el_lon = geocodes.get("longitude")
+        if el_lat is None or el_lon is None:
+            continue
+
+        loc = place.get("location", {})
+        address = (loc.get("address") or "").strip()
+        city = (loc.get("city") or loc.get("locality") or loc.get("cross_street") or "").strip()
+        state = (loc.get("state") or loc.get("region") or "").strip()
+        country = (loc.get("country") or "").strip()
+        formatted = loc.get("formatted_address") or address
+
+        role_tags = ["job coaching"]
+        for kw in ("placement", "interview", "career", "soft skills", "resume", "training", "aptitude"):
+            if kw in name.lower() and kw not in role_tags:
+                role_tags.append(kw)
+
+        # FSQ returns distance in metres from the query point
+        dist_m = place.get("distance")
+        dist_km = round(dist_m / 1000, 1) if dist_m is not None else round(
+            _haversine_km(center_lat, center_lon, el_lat, el_lon), 1
+        )
+
+        gmaps_q = requests.utils.quote(f"{name}, {formatted or city}")
+        gmaps_url = f"https://www.google.com/maps/search/?api=1&query={gmaps_q}"
+
+        results.append({
+            "id": f"fsq:{place.get('fsq_id', '')}",
+            "name": name,
+            "type": "center",
+            "roleTags": list(dict.fromkeys(role_tags)),
+            "city": city,
+            "state": state,
+            "country": country,
+            "address": formatted or address,
+            "lat": el_lat,
+            "lon": el_lon,
+            "distanceKm": dist_km,
+            "rating": None,
+            "contact": "",
+            "hours": "",
+            "score": round(max(0.0, 100.0 - dist_km * 3.0), 1),
+            "googleMapsUrl": gmaps_url,
+        })
+
+    results.sort(key=lambda x: x["distanceKm"])
+    return results[:5]
+
+
+def _geocode_location(query_text):
+    """Geocode a free-text location to (lat, lon) using Nominatim (OpenStreetMap).
+    Returns (lat, lon, display_name) or (None, None, None) on failure.
+    Free to use — no API key required.
+    """
+    try:
+        url = (
+            "https://nominatim.openstreetmap.org/search"
+            f"?q={requests.utils.quote(query_text)}"
+            "&format=json&limit=1&addressdetails=1"
+        )
+        resp = requests.get(
+            url,
+            headers={"User-Agent": "AI-Job-Screening-Analyzer/1.0"},
+            timeout=6,
+        )
+        data = resp.json()
+        if data:
+            item = data[0]
+            return float(item["lat"]), float(item["lon"]), item.get("display_name", query_text)
+    except Exception as exc:
+        logger.warning(f"geocode.failed query={query_text!r} error={exc}")
+    return None, None, None
+
+
+def _search_coaching_osm(lat, lon, radius_m=8000):
+    """Query Overpass API for job-related coaching/placement/career centers near (lat, lon).
+    Returns a list of raw OSM element dicts. Completely free — no key required.
+    Tries two public Overpass mirrors for resilience.
+    """
+    overpass_query = (
+        "[out:json][timeout:15];\n"
+        "(\n"
+        f"  node[\"amenity\"~\"training|education_centre\"](around:{radius_m},{lat},{lon});\n"
+        f"  node[\"name\"~\"coaching|placement|interview|career|soft.skill|aptitude|resume|employability|training|mentor\",i](around:{radius_m},{lat},{lon});\n"
+        f"  way[\"name\"~\"coaching|placement|interview|career|soft.skill|aptitude|resume|employability|training|mentor\",i](around:{radius_m},{lat},{lon});\n"
+        f"  relation[\"name\"~\"coaching|placement|interview|career|soft.skill|aptitude|resume|employability|training|mentor\",i](around:{radius_m},{lat},{lon});\n"
+        ");\n"
+        "out center 30;\n"
+    )
+    mirrors = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+    ]
+    for mirror in mirrors:
+        try:
+            resp = requests.post(
+                mirror,
+                data={"data": overpass_query},
+                timeout=15,
+            )
+            if resp.status_code == 200 and resp.text.strip():
+                elements = resp.json().get("elements", [])
+                if elements:
+                    logger.info(f"overpass.success mirror={mirror} elements={len(elements)}")
+                    return elements
+        except Exception as exc:
+            logger.warning(f"overpass.failed mirror={mirror} lat={lat} lon={lon} error={exc}")
+    return []
+
+
+def _search_coaching_nominatim(query_text, lat, lon):
+    """Search Nominatim for job coaching/placement/career places near a location.
+    Uses bounding-box search with job-specific keywords. Free, no key needed.
+    """
+    delta = 0.07  # ~8 km bounding box
+    viewbox = f"{lon - delta},{lat - delta},{lon + delta},{lat + delta}"
+    # Generic search keywords (will be filtered by relevance afterwards)
+    keywords = [
+        "coaching",
+        "institute",
+        "training",
+        "classes",
+        "academy",
+    ]
+    all_results = []
+    seen_ids = set()
+    headers = {"User-Agent": "AI-Job-Screening-Analyzer/1.0"}
+    for kw in keywords[:4]:  # limit to 4 keyword calls
+        try:
+            url = (
+                "https://nominatim.openstreetmap.org/search"
+                f"?q={requests.utils.quote(kw + ' ' + query_text)}"
+                f"&format=json&limit=10&addressdetails=1"
+                f"&viewbox={viewbox}&bounded=0"
+            )
+            resp = requests.get(url, headers=headers, timeout=6)
+            for item in resp.json():
+                osm_id = item.get("osm_id")
+                if osm_id and osm_id not in seen_ids:
+                    seen_ids.add(osm_id)
+                    all_results.append(item)
+        except Exception as exc:
+            logger.warning(f"nominatim.search_failed kw={kw!r} error={exc}")
+    return all_results
+
+
+def _build_nominatim_coaching_results(items, center_lat, center_lon):
+    """Convert Nominatim search results into job-coaching CoachingMapLocation dicts."""
+    seen = set()
+    results = []
+    for item in items:
+        name = (item.get("display_name") or "").split(",")[0].strip()
+        if not name or name.lower() in seen:
+            continue
+        # Filter: only job/career coaching relevant places
+        if not _is_job_coaching_relevant(name):
+            continue
+        seen.add(name.lower())
+
+        try:
+            el_lat = float(item["lat"])
+            el_lon = float(item["lon"])
+        except (KeyError, ValueError):
+            continue
+
+        addr = item.get("address", {})
+        city = (addr.get("city") or addr.get("town") or addr.get("suburb") or addr.get("village") or "").strip()
+        state = (addr.get("state") or "").strip()
+        country = (addr.get("country") or "").strip()
+        road = addr.get("road") or addr.get("neighbourhood") or ""
+        address = ", ".join(p for p in [road, city] if p) or item.get("display_name", "")[:80]
+
+        role_tags = ["job coaching"]
+        for kw in ("placement", "interview", "career", "soft skills", "resume", "training", "aptitude"):
+            if kw in name.lower() and kw not in role_tags:
+                role_tags.append(kw)
+
+        dist_km = _haversine_km(center_lat, center_lon, el_lat, el_lon)
+        gmaps_q = requests.utils.quote(f"{name}, {city}")
+        gmaps_url = f"https://www.google.com/maps/search/?api=1&query={gmaps_q}"
+
+        results.append({
+            "id": f"nom:{item.get('osm_type', 'n')}:{item.get('osm_id', '')}",
+            "name": name,
+            "type": "center",
+            "roleTags": list(dict.fromkeys(role_tags)),
+            "city": city,
+            "state": state,
+            "country": country,
+            "address": address,
+            "lat": el_lat,
+            "lon": el_lon,
+            "distanceKm": round(dist_km, 1),
+            "rating": None,
+            "contact": "",
+            "hours": "",
+            "score": round(max(0.0, 100.0 - dist_km * 3.0), 1),
+            "googleMapsUrl": gmaps_url,
+        })
+
+    results.sort(key=lambda x: x["distanceKm"])
+    return results[:5]
+
+
+def _build_osm_coaching_results(elements, center_lat, center_lon):
+    """Convert raw Overpass API elements into job-coaching CoachingMapLocation dicts.
+    Filters to job/career/placement relevant places only.
+    Returns up to 5 results sorted by distance.
+    """
+    seen = set()
+    results = []
+    for el in elements:
+        tags = el.get("tags", {})
+        name = (tags.get("name") or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        # Filter: only job/career coaching relevant places
+        if not _is_job_coaching_relevant(name):
+            continue
+        seen.add(name.lower())
+
+        el_lat = el.get("lat") or (el.get("center") or {}).get("lat")
+        el_lon = el.get("lon") or (el.get("center") or {}).get("lon")
+        if el_lat is None or el_lon is None:
+            continue
+
+        city = (tags.get("addr:city") or tags.get("addr:suburb") or tags.get("addr:town") or "").strip()
+        state = (tags.get("addr:state") or tags.get("addr:county") or "").strip()
+        country = (tags.get("addr:country") or "").strip()
+
+        addr_parts = [p for p in [
+            tags.get("addr:housenumber", ""),
+            tags.get("addr:street", ""),
+            tags.get("addr:suburb", ""),
+            city,
+        ] if p]
+        address = ", ".join(addr_parts) or tags.get("addr:full", "") or f"Near {city or 'this area'}"
+
+        role_tags = ["job coaching"]
+        for kw in ("placement", "interview", "career", "soft skills", "resume", "training", "aptitude", "prep"):
+            if kw in name.lower() and kw not in role_tags:
+                role_tags.append(kw)
+
+        dist_km = _haversine_km(center_lat, center_lon, el_lat, el_lon)
+        gmaps_q = requests.utils.quote(f"{name}, {address}, {city}")
+        gmaps_url = f"https://www.google.com/maps/search/?api=1&query={gmaps_q}"
+
+        results.append({
+            "id": f"osm:{el.get('type', 'n')}:{el.get('id', '')}",
+            "name": name,
+            "type": "center",
+            "roleTags": list(dict.fromkeys(role_tags)),
+            "city": city,
+            "state": state,
+            "country": country,
+            "address": address,
+            "lat": el_lat,
+            "lon": el_lon,
+            "distanceKm": round(dist_km, 1),
+            "rating": None,
+            "contact": (tags.get("phone") or tags.get("contact:phone") or "").strip(),
+            "hours": tags.get("opening_hours", ""),
+            "score": round(max(0.0, 100.0 - dist_km * 3.0), 1),
+            "googleMapsUrl": gmaps_url,
+        })
+
+    results.sort(key=lambda x: x["distanceKm"])
+    return results[:5]
 
 def _attach_map_selection_to_version(user_id, selection_record, version_number=None):
     with _versions_lock:
@@ -2701,15 +3091,45 @@ def coaching_locations(user_info):
     center = {'lat': lat, 'lon': lon} if lat is not None and lon is not None else None
 
     if query_text:
-        locations = _build_typed_location_results(query_text)
-        if center:
-            for item in locations:
-                item['distanceKm'] = round(_haversine_km(center['lat'], center['lon'], 23.0, 80.0), 1)
+        # Tier 1: Geocode the typed location to real lat/lon via Nominatim
+        geo_lat, geo_lon, _ = _geocode_location(query_text)
+        if geo_lat is not None:
+            center = {'lat': geo_lat, 'lon': geo_lon}
+
+        locations = []
+        source = 'fallback'
+
+        # Tier 2a: Foursquare Places API — real business data (needs FOURSQUARE_API_KEY)
+        if geo_lat is not None:
+            fsq_places = _search_coaching_foursquare(query_text, geo_lat, geo_lon, radius_m=8000)
+            locations = _build_foursquare_coaching_results(fsq_places, geo_lat, geo_lon)
+            if locations:
+                source = 'foursquare'
+
+        # Tier 2b: Overpass API — OpenStreetMap real nodes (free, no key)
+        if not locations and geo_lat is not None:
+            osm_elements = _search_coaching_osm(geo_lat, geo_lon, radius_m=8000)
+            locations = _build_osm_coaching_results(osm_elements, geo_lat, geo_lon)
+            if locations:
+                source = 'overpass'
+
+        # Tier 2c: Nominatim keyword search (reliable free fallback)
+        if not locations and geo_lat is not None:
+            nom_items = _search_coaching_nominatim(query_text, geo_lat, geo_lon)
+            locations = _build_nominatim_coaching_results(nom_items, geo_lat, geo_lon)
+            if locations:
+                source = 'nominatim'
+
+        # Tier 3: Google Maps search link tiles (final fallback — always returns 5)
+        if not locations:
+            locations = _build_typed_location_results(query_text)
+
         selections_store = _read_map_selections_store()
         saved_selections = selections_store.get(user_id, [])[-10:]
         write_audit(user_id, 'coaching.locations.search', {
             'location': query_text,
             'matched': len(locations),
+            'source': source,
         })
         return jsonify({
             'center': center,
@@ -2722,6 +3142,7 @@ def coaching_locations(user_info):
             'locations': locations[:5],
             'savedSelections': saved_selections,
         })
+
 
     locations = []
     for location in _read_map_locations_store():

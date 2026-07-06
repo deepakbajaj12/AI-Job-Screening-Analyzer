@@ -336,8 +336,8 @@ class TestAIOrchestratorEndpoint:
                 "rewritten_summary": "Tailored summary",
                 "tailored_bullets": [{"original": "Built APIs", "rewritten": "Built scalable APIs"}],
             }),
-            "Tailored cover letter for the role.",
             json.dumps({"questions": ["How would you scale this API?", "Describe a production incident."]}),
+            "Tailored cover letter for the role.",
         ]
 
         data = {
@@ -359,7 +359,7 @@ class TestAIOrchestratorEndpoint:
         assert payload["coverLetter"]["coverLetter"] == "Tailored cover letter for the role."
         assert payload["interviewQuestions"]["questions"][0] == "How would you scale this API?"
         assert payload["recommendations"]["primaryAction"]
-        mock_save.assert_called_once()
+        assert mock_save.call_count == 2
 
 
 # =============================

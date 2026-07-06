@@ -23,26 +23,38 @@ type CoachingMapProps = {
   onSaved?: () => void | Promise<void>
 }
 
-function buildMapUrl(center: CoachingMapCoords) {
-  const delta = 0.05
-  const minLon = center.lon - delta
-  const maxLon = center.lon + delta
-  const minLat = center.lat - delta
-  const maxLat = center.lat + delta
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${minLon}%2C${minLat}%2C${maxLon}%2C${maxLat}&layer=mapnik&marker=${center.lat}%2C${center.lon}`
-}
+// Read API key from Vite env — set VITE_GOOGLE_MAPS_API_KEY in frontend/.env
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
 
-function buildGoogleMapsUrl(locationQuery: string, center: CoachingMapCoords | null) {
+/** Build an embed iframe URL.
+ *  - With key  → uses the official Maps Embed API v1 (no watermark, no rate-limit)
+ *  - Without key → falls back to OpenStreetMap so the map is never blank.
+ */
+function buildEmbedUrl(locationQuery: string, center: CoachingMapCoords | null): string {
   const query = locationQuery.trim()
-  if (query) {
-    return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
+
+  if (GOOGLE_MAPS_API_KEY) {
+    // Official Maps Embed API v1 — search mode
+    if (query) {
+      return `https://www.google.com/maps/embed/v1/search?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(query)}`
+    }
+    if (center) {
+      return `https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${center.lat},${center.lon}&zoom=13`
+    }
+    return `https://www.google.com/maps/embed/v1/search?key=${GOOGLE_MAPS_API_KEY}&q=coaching+centers`
   }
 
+  // ── Fallback: OpenStreetMap (no API key needed) ────────────────────────────
   if (center) {
-    return `https://www.google.com/maps?q=${center.lat},${center.lon}&output=embed`
+    const delta = 0.05
+    return (
+      `https://www.openstreetmap.org/export/embed.html` +
+      `?bbox=${center.lon - delta}%2C${center.lat - delta}%2C${center.lon + delta}%2C${center.lat + delta}` +
+      `&layer=mapnik&marker=${center.lat}%2C${center.lon}`
+    )
   }
-
-  return 'https://www.google.com/maps?q=coaching&output=embed'
+  // Generic world view
+  return 'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik'
 }
 
 export default function CoachingMap({ onSaved }: CoachingMapProps) {
@@ -59,7 +71,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
 
   const activeCenter = coords ?? DEFAULT_CENTER
 
-  const mapUrl = useMemo(() => buildGoogleMapsUrl(locationQuery, activeCenter), [locationQuery, activeCenter])
+  const mapUrl = useMemo(() => buildEmbedUrl(locationQuery, activeCenter), [locationQuery, activeCenter])
 
   const refreshLocations = async (centerOverride?: CoachingMapCoords | null) => {
     if (!token) {
@@ -217,6 +229,16 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
                 {typeof location.score === 'number' && <span className="chip">Score {location.score.toFixed(0)}</span>}
               </div>
               <div className="coaching-map-result-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => {
+                    setCoords({ lat: location.lat, lon: location.lon })
+                    setSelectedLocationId(location.id)
+                  }}
+                >
+                  📍 Center on Map
+                </button>
                 <a className="btn secondary" href={location.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${location.name}, ${location.address}, ${location.city}`)}`} target="_blank" rel="noreferrer">
                   Open in Google Maps
                 </a>
@@ -224,6 +246,7 @@ export default function CoachingMap({ onSaved }: CoachingMapProps) {
                   {savingId === location.id ? 'Saving...' : 'Save to Progress'}
                 </button>
               </div>
+
             </article>
           ))}
         </div>
