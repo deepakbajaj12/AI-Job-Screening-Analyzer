@@ -1,105 +1,153 @@
-# RAG ENGINE: LangChain + FAISS + HuggingFace Embeddings for grounded resume Q&A
-# Uses all-MiniLM-L6-v2 (free, local, no API key needed) + FAISS in-memory vector store
+# RAG ENGINE: Ultra-Low-Memory Hybrid RAG for Resume Q&A
+# Optimized for 512MB RAM environments (Render Free Tier)
+# Primary: LangChain + FAISS + HuggingFace Embeddings (Lazy Loaded)
+# Fallback: Scikit-Learn TF-IDF Vectorizer + Cosine Similarity (<5MB RAM)
 
-import os
+import gc
 import logging
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Lazy imports — app.py won't crash if langchain is not yet installed
+# Check dependency availability without loading heavy models into RAM at startup
 _langchain_available = False
+_huggingface_available = False
+_tfidf_available = False
+
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_core.documents import Document
+    _langchain_available = True
+except ImportError:
+    pass
+
+try:
     from langchain_community.vectorstores import FAISS
     from langchain_huggingface import HuggingFaceEmbeddings
-    _langchain_available = True
-    logger.info("LangChain RAG engine loaded successfully.")
-except ImportError as e:
-    logger.warning(f"LangChain not installed. RAG features disabled. Error: {e}")
+    _huggingface_available = True
+except ImportError:
+    pass
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    _tfidf_available = True
+except ImportError:
+    pass
 
 
 class ResumeRAGEngine:
     """
-    Retrieval-Augmented Generation engine for resume Q&A.
+    Memory-Efficient Retrieval-Augmented Generation Engine.
 
-    Pipeline:
-      1. ingest_text(text) -> Chunk -> Embed (HuggingFace) -> Store (FAISS)
-      2. query(question)   -> Semantic similarity search -> Return top-k chunks
-      3. build_grounded_prompt(q, jd) -> Grounded LLM prompt string
+    Features:
+      - Lazy Loading: Embeddings model is loaded only on first query/ingest
+      - Dual Vector Engine: Tries FAISS+HuggingFace first; falls back to lightweight TF-IDF (<5MB RAM)
+      - Explicit GC: Clears memory pools after operations to prevent memory leaks
     """
 
     def __init__(self):
         self.vector_store = None
         self.embeddings = None
         self.chunk_count = 0
-        self._ready = False
+        self._mode = "uninitialized"  # "faiss" or "tfidf"
+        self._raw_chunks: List[str] = []
+        self._tfidf_vectorizer = None
+        self._tfidf_matrix = None
 
-        if not _langchain_available:
-            logger.warning("RAG engine in degraded mode — LangChain not available.")
-            return
+    @property
+    def is_ready(self) -> bool:
+        return _langchain_available or _tfidf_available
+
+    @property
+    def is_indexed(self) -> bool:
+        return self.chunk_count > 0
+
+    def _init_embeddings(self) -> bool:
+        """Lazy load HuggingFace Embeddings on demand."""
+        if self.embeddings is not None:
+            return True
+        if not _huggingface_available:
+            return False
 
         try:
-            # Free open-source embeddings model — runs on CPU, no API key needed
+            logger.info("Lazy-loading HuggingFace all-MiniLM-L6-v2 embeddings...")
             self.embeddings = HuggingFaceEmbeddings(
                 model_name="all-MiniLM-L6-v2",
                 model_kwargs={"device": "cpu"},
                 encode_kwargs={"normalize_embeddings": True}
             )
-            self._ready = True
-            logger.info("HuggingFace embeddings (all-MiniLM-L6-v2) initialized.")
+            return True
         except Exception as e:
-            logger.error(f"Failed to initialize embeddings: {e}")
-
-    @property
-    def is_ready(self) -> bool:
-        return self._ready
-
-    @property
-    def is_indexed(self) -> bool:
-        return self.vector_store is not None and self.chunk_count > 0
+            logger.warning(f"Failed to load HuggingFace embeddings (RAM limit?): {e}. Falling back to TF-IDF engine.")
+            self.embeddings = None
+            return False
 
     def ingest_text(self, text: str, source_label: str = "resume") -> dict:
         """
-        Chunk raw text and store embeddings in FAISS vector store.
-        Returns: dict with success status and number of chunks indexed.
+        Chunk raw text and store in vector index.
+        Uses FAISS+HuggingFace if RAM permits, otherwise TF-IDF.
         """
-        if not self._ready:
-            return {"success": False, "error": "RAG engine not ready. Install LangChain dependencies."}
-
         if not text or not text.strip():
             return {"success": False, "error": "Empty text provided."}
 
         try:
-            # Split text into overlapping 500-char chunks
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=50,
-                separators=["\n\n", "\n", ". ", " ", ""]
-            )
-            chunks = splitter.create_documents(
-                texts=[text],
-                metadatas=[{"source": source_label}] * len(splitter.split_text(text))
-            )
-
-            if not chunks:
-                return {"success": False, "error": "No chunks created from document."}
-
-            # Create or merge into FAISS vector store
-            if self.vector_store is None:
-                self.vector_store = FAISS.from_documents(chunks, self.embeddings)
+            # 1. Chunk document
+            if _langchain_available:
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=500,
+                    chunk_overlap=50,
+                    separators=["\n\n", "\n", ". ", " ", ""]
+                )
+                chunk_objs = splitter.create_documents(
+                    texts=[text],
+                    metadatas=[{"source": source_label}] * len(splitter.split_text(text))
+                )
+                chunks_text = [doc.page_content for doc in chunk_objs]
             else:
-                new_store = FAISS.from_documents(chunks, self.embeddings)
-                self.vector_store.merge_from(new_store)
+                # Simple fallback splitter
+                paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+                chunks_text = paragraphs if paragraphs else [text[i:i+500] for i in range(0, len(text), 450)]
 
-            self.chunk_count += len(chunks)
-            logger.info(f"Indexed {len(chunks)} chunks from '{source_label}'. Total: {self.chunk_count}")
+            if not chunks_text:
+                return {"success": False, "error": "No chunks generated from document."}
+
+            self._raw_chunks = chunks_text
+            self.chunk_count = len(chunks_text)
+
+            # 2. Try FAISS Vector Store first
+            faiss_success = False
+            if _huggingface_available and self._init_embeddings():
+                try:
+                    if _langchain_available:
+                        docs = [Document(page_content=c, metadata={"source": source_label}) for c in chunks_text]
+                        if self.vector_store is None:
+                            self.vector_store = FAISS.from_documents(docs, self.embeddings)
+                        else:
+                            self.vector_store.merge_from(FAISS.from_documents(docs, self.embeddings))
+                        self._mode = "faiss"
+                        faiss_success = True
+                except Exception as faiss_err:
+                    logger.warning(f"FAISS indexing error: {faiss_err}. Reverting to TF-IDF.")
+                    self.vector_store = None
+
+            # 3. TF-IDF Fallback (<5MB RAM footprint)
+            if not faiss_success:
+                if _tfidf_available:
+                    self._tfidf_vectorizer = TfidfVectorizer(stop_words='english')
+                    self._tfidf_matrix = self._tfidf_vectorizer.fit_transform(self._raw_chunks)
+                    self._mode = "tfidf"
+                else:
+                    self._mode = "raw"
+
+            gc.collect()  # Release transient objects from RAM
 
             return {
                 "success": True,
-                "chunks_indexed": len(chunks),
+                "chunks_indexed": len(chunks_text),
                 "total_chunks": self.chunk_count,
-                "message": f"Successfully indexed {len(chunks)} chunks from {source_label}."
+                "engine_mode": self._mode,
+                "message": f"Successfully indexed {len(chunks_text)} chunks ({self._mode.upper()} mode)."
             }
 
         except Exception as e:
@@ -108,36 +156,70 @@ class ResumeRAGEngine:
 
     def query(self, question: str, top_k: int = 3) -> dict:
         """
-        Semantic similarity search over indexed documents.
-        Returns: dict with retrieved chunks and combined context string.
+        Semantic/Cosine similarity search over indexed chunks.
         """
-        if not self._ready:
-            return {"success": False, "error": "RAG engine not ready."}
         if not self.is_indexed:
             return {"success": False, "error": "No document indexed yet. Please upload a resume first."}
         if not question or not question.strip():
             return {"success": False, "error": "Question cannot be empty."}
 
         try:
-            docs_with_scores = self.vector_store.similarity_search_with_score(question, k=top_k)
+            retrieved_chunks = []
 
-            retrieved_chunks = [
-                {
-                    "content": doc.page_content,
-                    "source": doc.metadata.get("source", "unknown"),
-                    "relevance_score": round(float(1 - score), 3)
-                }
-                for doc, score in docs_with_scores
-            ]
+            # 1. FAISS Mode
+            if self._mode == "faiss" and self.vector_store is not None:
+                try:
+                    docs_with_scores = self.vector_store.similarity_search_with_score(question, k=top_k)
+                    for doc, score in docs_with_scores:
+                        retrieved_chunks.append({
+                            "content": doc.page_content,
+                            "source": doc.metadata.get("source", "resume"),
+                            "relevance_score": round(float(max(0.0, 1.0 - score)), 3)
+                        })
+                except Exception as query_err:
+                    logger.warning(f"FAISS query error: {query_err}. Switching to TF-IDF search.")
+                    self._mode = "tfidf"
+
+            # 2. TF-IDF Mode (Fast, low-RAM cosine similarity search)
+            if (self._mode == "tfidf" or not retrieved_chunks) and _tfidf_available and self._tfidf_matrix is not None:
+                q_vec = self._tfidf_vectorizer.transform([question])
+                sim_scores = cosine_similarity(q_vec, self._tfidf_matrix).flatten()
+                top_indices = sim_scores.argsort()[-top_k:][::-1]
+
+                for idx in top_indices:
+                    score = float(sim_scores[idx])
+                    if score > 0.0 or len(retrieved_chunks) < 1:  # Include top match
+                        retrieved_chunks.append({
+                            "content": self._raw_chunks[idx],
+                            "source": "resume",
+                            "relevance_score": round(score, 3)
+                        })
+
+            # 3. Simple Keyword Search Mode (Last resort fallback)
+            if not retrieved_chunks and self._raw_chunks:
+                words = set(question.lower().split())
+                scored = []
+                for chunk in self._raw_chunks:
+                    score = sum(1 for w in words if w in chunk.lower())
+                    scored.append((score, chunk))
+                scored.sort(key=lambda x: x[0], reverse=True)
+                for score, chunk in scored[:top_k]:
+                    retrieved_chunks.append({
+                        "content": chunk,
+                        "source": "resume",
+                        "relevance_score": round(min(1.0, score / max(1, len(words))), 3)
+                    })
 
             context = "\n\n---\n\n".join([c["content"] for c in retrieved_chunks])
+            gc.collect()
 
             return {
                 "success": True,
                 "question": question,
                 "retrieved_chunks": retrieved_chunks,
                 "context": context,
-                "chunks_retrieved": len(retrieved_chunks)
+                "chunks_retrieved": len(retrieved_chunks),
+                "engine_mode": self._mode
             }
 
         except Exception as e:
@@ -145,10 +227,7 @@ class ResumeRAGEngine:
             return {"success": False, "error": f"Query failed: {str(e)}"}
 
     def build_grounded_prompt(self, question: str, job_description: str = "") -> dict:
-        """
-        Retrieve relevant context and build a grounded LLM prompt.
-        LLM is instructed to answer ONLY from retrieved resume context — no hallucinations.
-        """
+        """Build grounded LLM prompt string using retrieved context."""
         query_result = self.query(question, top_k=3)
         if not query_result.get("success"):
             return query_result
@@ -172,33 +251,39 @@ Answer (grounded strictly in the resume context above):"""
             "success": True,
             "grounded_prompt": grounded_prompt,
             "source_chunks": query_result["retrieved_chunks"],
-            "context": context
+            "context": context,
+            "engine_mode": query_result.get("engine_mode", "hybrid")
         }
 
     def clear(self) -> dict:
-        """Clear the vector store and reset for a new session."""
+        """Clear indices and run garbage collection."""
         self.vector_store = None
         self.chunk_count = 0
-        logger.info("RAG vector store cleared.")
-        return {"success": True, "message": "Vector store cleared. Ready for new document."}
+        self._raw_chunks = []
+        self._tfidf_vectorizer = None
+        self._tfidf_matrix = None
+        self._mode = "uninitialized"
+        gc.collect()
+        logger.info("RAG engine cleared and RAM garbage collected.")
+        return {"success": True, "message": "Vector store cleared."}
 
     def status(self) -> dict:
-        """Return current engine status."""
+        """Return engine status."""
         return {
-            "ready": self._ready,
+            "ready": self.is_ready,
             "indexed": self.is_indexed,
             "chunks_indexed": self.chunk_count,
-            "embeddings_model": "all-MiniLM-L6-v2" if self._ready else "unavailable",
-            "vector_store": "FAISS (in-memory)" if self.is_indexed else "empty"
+            "mode": self._mode,
+            "embeddings_model": "all-MiniLM-L6-v2 (lazy-loaded)" if _huggingface_available else "TF-IDF (low-memory)",
+            "vector_store": self._mode.upper() if self.is_indexed else "empty"
         }
 
 
-# Module-level singleton — shared across all Flask requests
+# Singleton instance
 _rag_instance: Optional[ResumeRAGEngine] = None
 
 
 def get_rag_engine() -> ResumeRAGEngine:
-    """Get or create the singleton RAG engine instance."""
     global _rag_instance
     if _rag_instance is None:
         _rag_instance = ResumeRAGEngine()
