@@ -799,3 +799,62 @@ export async function downloadCoachingReportPdf(
   URL.revokeObjectURL(url)
 }
 
+// =============================
+// RAG (LangChain + FAISS) API
+// =============================
+
+export async function ragIngest(token: string | null, payload: { text: string, source_label?: string }) {
+  const res = await fetch(`${API_BASE}/api/rag/ingest`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`RAG ingest failed: ${res.status}`)
+  return res.json() as Promise<{ success: boolean, chunks_indexed?: number, total_chunks?: number, message?: string, error?: string }>
+}
+
+export async function ragQuery(token: string | null, payload: { question: string, top_k?: number }) {
+  const res = await fetch(`${API_BASE}/api/rag/query`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`RAG query failed: ${res.status}`)
+  return res.json() as Promise<{ success: boolean, question?: string, retrieved_chunks?: Array<{ content: string, source: string, relevance_score: number }>, context?: string, error?: string }>
+}
+
+export async function ragAnalyze(token: string | null, payload: { question: string, job_description?: string }) {
+  const res = await fetch(`${API_BASE}/api/rag/analyze`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`RAG analyze failed: ${res.status}`)
+  return res.json() as Promise<{ success: boolean, question?: string, answer?: string, source_chunks?: Array<{ content: string, source: string, relevance_score: number }>, grounded?: boolean, error?: string }>
+}
+
+export async function ragStatus(token: string | null) {
+  const res = await fetch(`${API_BASE}/api/rag/status`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  })
+  if (!res.ok) throw new Error(`RAG status failed: ${res.status}`)
+  return res.json() as Promise<{ ready: boolean, indexed: boolean, chunks_indexed: number, embeddings_model: string, vector_store: string }>
+}
+
+export async function ragClear(token: string | null) {
+  const res = await fetch(`${API_BASE}/api/rag/clear`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  })
+  if (!res.ok) throw new Error(`RAG clear failed: ${res.status}`)
+  return res.json() as Promise<{ success: boolean, message?: string }>
+}

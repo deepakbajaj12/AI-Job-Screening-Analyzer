@@ -68,6 +68,22 @@ except ImportError:
         get_user_history = lambda *a, **kw: []
         get_db = lambda: (None, False)
 
+# RAG Engine — LangChain + FAISS + HuggingFace (graceful degradation if not installed)
+try:
+    from backend.rag_engine import get_rag_engine
+except ImportError:
+    try:
+        from rag_engine import get_rag_engine
+    except ImportError:
+        def get_rag_engine():
+            class _FallbackRAG:
+                def ingest_text(self, *a, **kw): return {"success": False, "error": "RAG not available. Install LangChain."}
+                def query(self, *a, **kw): return {"success": False, "error": "RAG not available. Install LangChain."}
+                def build_grounded_prompt(self, *a, **kw): return {"success": False, "error": "RAG not available."}
+                def clear(self): return {"success": False, "error": "RAG not available."}
+                def status(self): return {"ready": False, "indexed": False, "chunks_indexed": 0, "error": "LangChain not installed."}
+            return _FallbackRAG()
+
 # Import config with fallback specifically for different deployment contexts
 try:
     from backend.config import Config, init_directories, configure_logging
@@ -4036,6 +4052,148 @@ def generate_networking_message(user_info):
     except Exception as e:
         logger.error(f"Error in generate_networking_message: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# ─── RAG (LangChain + FAISS + HuggingFace) Endpoints ────────────────────────
+
+@app.route('/api/rag/ingest', methods=['POST'])
+def rag_ingest():
+    """Index resume text into FAISS vector store for RAG Q&A."""
+    try:
+        uid = None
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            try:
+                decoded = verify_firebase_token(auth_header[7:])
+                uid = decoded.get('uid')
+            except Exception:
+                pass
+
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON body provided.'}), 400
+
+        text = data.get('text', '').strip()
+        source_label = data.get('source_label', 'resume')
+
+        if not text:
+            return jsonify({'success': False, 'error': 'Text field is required and cannot be empty.'}), 400
+
+        rag = get_rag_engine()
+        result = rag.ingest_text(text, source_label=source_label)
+        return jsonify(result), 200 if result.get('success') else 500
+
+    except Exception as e:
+        logger.error(f'RAG ingest error: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/rag/query', methods=['POST'])
+def rag_query():
+    """Semantic similarity search over indexed resume chunks."""
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON body provided.'}), 400
+
+        question = data.get('question', '').strip()
+        top_k = int(data.get('top_k', 3))
+
+        if not question:
+            return jsonify({'success': False, 'error': 'Question field is required.'}), 400
+
+        rag = get_rag_engine()
+        result = rag.query(question, top_k=top_k)
+        return jsonify(result), 200 if result.get('success') else 400
+
+    except Exception as e:
+        logger.error(f'RAG query error: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/rag/analyze', methods=['POST'])
+def rag_analyze():
+    """
+    Full RAG-grounded analysis:
+    1. Retrieves top-k relevant resume chunks via semantic search
+    2. Builds grounded prompt injecting ONLY retrieved context
+    3. Calls LLM (Cohere/OpenAI) to generate a truthful, grounded answer
+    """
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON body provided.'}), 400
+
+        question = data.get('question', '').strip()
+        job_description = data.get('job_description', '').strip()
+
+        if not question:
+            return jsonify({'success': False, 'error': 'Question field is required.'}), 400
+
+        rag = get_rag_engine()
+        prompt_result = rag.build_grounded_prompt(question, job_description=job_description)
+
+        if not prompt_result.get('success'):
+            return jsonify(prompt_result), 400
+
+        grounded_prompt = prompt_result['grounded_prompt']
+        source_chunks = prompt_result.get('source_chunks', [])
+
+        # Call LLM with grounded prompt
+        llm_answer = ''
+        try:
+            if co:
+                resp = co.generate(prompt=grounded_prompt, max_tokens=500, temperature=0.2)
+                llm_answer = resp.generations[0].text.strip()
+            elif OpenAI:
+                client = OpenAI(api_key=Config.OPENAI_API_KEY)
+                resp = client.chat.completions.create(
+                    model='gpt-3.5-turbo',
+                    messages=[{'role': 'user', 'content': grounded_prompt}],
+                    temperature=0.2,
+                    max_tokens=500
+                )
+                llm_answer = resp.choices[0].message.content.strip()
+            else:
+                llm_answer = 'LLM not configured. Retrieved context: ' + prompt_result.get('context', '')[:500]
+        except Exception as llm_err:
+            logger.warning(f'LLM call failed in RAG analyze, returning context only: {llm_err}')
+            llm_answer = 'LLM unavailable. Retrieved context: ' + prompt_result.get('context', '')[:500]
+
+        return jsonify({
+            'success': True,
+            'question': question,
+            'answer': llm_answer,
+            'source_chunks': source_chunks,
+            'grounded': True,
+            'model': 'RAG + LLM (grounded)'
+        }), 200
+
+    except Exception as e:
+        logger.error(f'RAG analyze error: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/rag/status', methods=['GET'])
+def rag_status():
+    """Return current RAG engine status — ready, indexed, chunk count."""
+    try:
+        rag = get_rag_engine()
+        return jsonify(rag.status()), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/rag/clear', methods=['POST'])
+def rag_clear():
+    """Clear the FAISS vector store — start fresh for new document session."""
+    try:
+        rag = get_rag_engine()
+        result = rag.clear()
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f'RAG clear error: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 if __name__ == "__main__":

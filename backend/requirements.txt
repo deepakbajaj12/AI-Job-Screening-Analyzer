@@ -1,4 +1,4 @@
-﻿# PYTHON DEPENDENCIES: Flask, MongoDB, Redis, Celery, Cohere/OpenAI APIs, PDFPlumber, Spacy NLP, Firebase auth, and testing frameworks
+# PYTHON DEPENDENCIES: Flask, MongoDB, Redis, Celery, Cohere/OpenAI APIs, PDFPlumber, Spacy NLP, Firebase auth, and testing frameworks
 annotated-types==0.7.0
 anyio==4.9.0
 blinker==1.9.0
@@ -75,4 +75,12 @@ dnspython
 python-dotenv
 rq
 reportlab
+
+# LangChain RAG Stack (free, open-source, no API key needed)
+langchain==0.3.0
+langchain-community==0.3.0
+langchain-core==0.3.0
+langchain-huggingface==0.1.0
+faiss-cpu==1.8.0
+sentence-transformers==3.0.0
 

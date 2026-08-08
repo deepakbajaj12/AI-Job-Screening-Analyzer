@@ -1,9 +1,10 @@
 // JOB SEEKER PAGE: Multiple AI tools - resume matching, cover letter generation, interview prep, salary estimation, career path, LinkedIn profile generation
 import { useState } from 'react'
-import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage, runAiOrchestrator, downloadAnalysisPdf, downloadCoverLetterPdf } from '../api/client'
+import { analyzeJobSeeker, generateCoverLetter, generateInterviewQuestions, analyzeSkills, generateLinkedInProfile, estimateSalary, tailorResume, generateCareerPath, resumeHealthCheck, generateNetworkingMessage, runAiOrchestrator, downloadAnalysisPdf, downloadCoverLetterPdf, ragIngest } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
 import DragAndDropUpload from '../components/DragAndDropUpload'
+import RagChat from '../components/RagChat'
 
 export default function JobSeeker() {
   const { token } = useAuth()
@@ -13,7 +14,8 @@ export default function JobSeeker() {
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
-  const [activeTab, setActiveTab] = useState<'orchestrator' | 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking'>('analyze')
+  const [ragChunks, setRagChunks] = useState(0)
+  const [activeTab, setActiveTab] = useState<'orchestrator' | 'analyze' | 'coverLetter' | 'questions' | 'skills' | 'linkedin' | 'salary' | 'tailor' | 'career' | 'health' | 'networking' | 'ragChat'>('analyze')
 
   // Networking State
   const [netRole, setNetRole] = useState('')
@@ -71,7 +73,36 @@ export default function JobSeeker() {
       } else if (action === 'health') {
         data = await resumeHealthCheck(token, { resume })
       }
-      setResult(data)
+    setResult(data)
+
+      // Auto-ingest resume into RAG vector store after any analysis
+      if (resume && token) {
+        try {
+          const reader = new FileReader()
+          reader.onload = async (e) => {
+            const text = e.target?.result as string
+            if (text && text.trim()) {
+              const ingestResult = await ragIngest(token, { text, source_label: 'resume' })
+              if (ingestResult.success && ingestResult.total_chunks) {
+                setRagChunks(ingestResult.total_chunks)
+              }
+            }
+          }
+          // Read as text — works for plain text; PDF binary is handled server-side
+          // We use the analyzed text from data if available
+          if (data?.resumeText || data?.analysis?.resumeText) {
+            const resumeText = data.resumeText || data.analysis?.resumeText || ''
+            if (resumeText.trim()) {
+              const ingestResult = await ragIngest(token, { text: resumeText, source_label: 'resume' })
+              if (ingestResult.success && ingestResult.total_chunks) {
+                setRagChunks(ingestResult.total_chunks)
+              }
+            }
+          }
+        } catch (ragErr) {
+          console.warn('RAG auto-ingest failed (non-critical):', ragErr)
+        }
+      }
     } catch (err: any) {
       setError(err?.message || 'Action failed')
     } finally {
@@ -145,6 +176,13 @@ export default function JobSeeker() {
           <button className="btn" onClick={() => handleAction('career')} disabled={loading}>Career Path</button>
           <button className="btn" onClick={() => handleAction('health')} disabled={loading}>Resume Health Check</button>
           <button className="btn" onClick={() => handleAction('networking')} disabled={loading}>Networking Assistant</button>
+          <button
+            className={`btn ${activeTab === 'ragChat' ? 'rag-tab-active' : 'rag-tab-btn'}`}
+            onClick={() => setActiveTab('ragChat')}
+            title="Chat with your resume using LangChain RAG + FAISS"
+          >
+            🧠 RAG Chat {ragChunks > 0 ? `(${ragChunks} chunks)` : ''}
+          </button>
           <Link to="/mock-interview" className="btn" style={{ textDecoration: 'none', textAlign: 'center' }}>Mock Interview</Link>
         </div>
       </div>
@@ -386,6 +424,17 @@ export default function JobSeeker() {
               <strong>💡 Tips:</strong> {result.tips}
             </div>
           )}
+        </div>
+      )}
+
+      {/* RAG Chat Tab */}
+      {activeTab === 'ragChat' && (
+        <div className="card">
+          <h3>🧠 RAG Resume Chat</h3>
+          <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+            Ask questions about your resume. Answers are grounded strictly in your uploaded document — powered by LangChain + FAISS + HuggingFace (free, local, no API key needed).
+          </p>
+          <RagChat chunksIndexed={ragChunks} jobDescription={jobDescription} />
         </div>
       )}
     </section>
