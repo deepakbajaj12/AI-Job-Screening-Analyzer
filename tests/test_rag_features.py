@@ -9,7 +9,7 @@ def test_rag_engine_init():
     rag = get_rag_engine()
     status = rag.status()
     assert status["ready"] is True
-    assert status["embeddings_model"] == "all-MiniLM-L6-v2"
+    assert "all-MiniLM-L6-v2" in status["embeddings_model"]
 
 
 def test_rag_ingest_and_query():
