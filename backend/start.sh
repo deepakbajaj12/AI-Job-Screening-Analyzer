@@ -8,17 +8,15 @@ export OPENBLAS_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
-# Open the HTTP port with 1 worker and 2 threads to prevent spawning duplicate memory-heavy processes.
-# Max-requests worker recycling prevents memory leaks over time.
-gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --max-requests 200 --max-requests-jitter 20 --timeout 120 --access-logfile - --error-logfile - backend.app:app &
-GUNICORN_PID=$!
-
-cleanup() {
-	kill "$GUNICORN_PID" 2>/dev/null || true
-}
-
-trap cleanup SIGTERM SIGINT
-
-# Keep container tied to the web process lifecycle.
-wait "$GUNICORN_PID"
-
+# Single worker + 2 threads to stay within 512MB RAM limit.
+# --max-requests recycles the worker periodically to prevent memory leaks.
+exec gunicorn \
+  --bind "0.0.0.0:${PORT:-8000}" \
+  --workers 1 \
+  --threads 2 \
+  --max-requests 200 \
+  --max-requests-jitter 20 \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile - \
+  backend.app:app

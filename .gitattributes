@@ -1,0 +1,28 @@
+# Global gitattributes - enforce Unix LF line endings for shell scripts
+# Prevents Windows CRLF causing "bad interpreter" errors on Linux (Render/Docker)
+
+# Shell scripts MUST always be LF
+*.sh text eol=lf
+
+# Python files - normalize to LF
+*.py text eol=lf
+
+# Config files
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.env text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+
+# Binaries - no line ending conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
