@@ -1,4 +1,6 @@
 # PYTHON DEPENDENCIES for AI Job Screening Analyzer
+# Lightweight set — no PyTorch/sentence-transformers to stay within 512MB RAM
+
 Flask>=3.0.0
 flask-cors>=5.0.0
 gunicorn>=23.0.0
@@ -29,10 +31,11 @@ rq>=1.16.0
 # Testing
 pytest>=8.0.0
 
-# LangChain RAG Stack (free, open-source)
+# LangChain RAG Stack (FAISS only — no PyTorch/sentence-transformers)
+# HuggingFace embeddings are disabled on Render (too heavy for free tier)
+# The RAG engine automatically falls back to TF-IDF (scikit-learn, already above)
 langchain>=0.3.0
 langchain-community>=0.3.0
 langchain-core>=0.3.0
-langchain-huggingface>=0.1.0
+langchain-text-splitters>=0.3.0
 faiss-cpu>=1.8.0
-sentence-transformers>=3.0.0

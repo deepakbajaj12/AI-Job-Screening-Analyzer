@@ -4,8 +4,15 @@ import { getHealth, getVersion } from '../api/client'
 export default function HealthBadge() {
   const [status, setStatus] = useState<'ok' | 'down' | 'checking'>('checking')
   const [version, setVersion] = useState<string>('')
+
   useEffect(() => {
     const controller = new AbortController()
+
+    // Render free tier cold-starts can take up to 60s — use a generous timeout
+    const timer = setTimeout(() => {
+      if (status === 'checking') setStatus('down')
+    }, 65000)
+
     Promise.allSettled([
       getHealth(controller.signal),
       getVersion(controller.signal)
@@ -19,11 +26,24 @@ export default function HealthBadge() {
       .catch(() => {
         if (!controller.signal.aborted) setStatus('down')
       })
-    return () => { controller.abort() }
+      .finally(() => clearTimeout(timer))
+
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
   }, [])
+
   return (
-    <span className={`badge ${status}`} title={`Backend ${version || ''}`}>
-      {status === 'checking' ? 'Checking…' : status === 'ok' ? `Healthy${version ? ` · v${version}` : ''}` : 'Down'}
+    <span
+      className={`badge ${status}`}
+      title={status === 'checking' ? 'Waiting for backend to wake up (free tier cold-start ~30s)…' : `Backend ${version || ''}`}
+    >
+      {status === 'checking'
+        ? '⏳ Waking up…'
+        : status === 'ok'
+        ? `✅ Healthy${version ? ` · v${version}` : ''}`
+        : '🔴 Down'}
     </span>
   )
 }
