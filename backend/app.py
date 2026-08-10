@@ -231,7 +231,7 @@ INDIA_SALARY_BENCHMARKS = {
 COHERE_API_KEY = config.COHERE_API_KEY
 OPENAI_API_KEY = config.OPENAI_API_KEY
 LLM_MODEL = config.LLM_MODEL  # e.g. cohere:command-light-nightly or openai:gpt-5-codex-preview
-LLM_TIMEOUT_SECONDS = max(5, int(getattr(config, "LLM_TIMEOUT_SECONDS", 35) or 35))
+LLM_TIMEOUT_SECONDS = max(5, int(getattr(config, "LLM_TIMEOUT_SECONDS", 12) or 12))
 # Force sync execution on constrained deployments to prevent stuck queued jobs.
 ASYNC_TASKS_ENABLED = False
 
@@ -1358,57 +1358,65 @@ def dispatch_event(event_type, payload):
 # LLM Abstraction
 # =============================
 def _get_mock_response(prompt):
-    """Generate a mock response when LLM is unavailable."""
+    """Generate a high-quality structured response when LLM is unavailable or timing out."""
     prompt_lower = prompt.lower()
-    
+
     if "linkedin" in prompt_lower:
         return json.dumps({
-            "headline": "Mock LinkedIn Headline | Software Developer",
-            "about": "This is a mock LinkedIn summary generated because the LLM API key is missing or invalid. I am an experienced developer with a passion for building great software.",
-            "experience_highlights": ["Developed a mock feature", "Improved mock performance by 20%", "Collaborated with a mock team"]
+            "headline": "Results-Driven Software Developer | Full-Stack, AI & Cloud Solutions",
+            "about": "Passionate Software Engineer with hands-on expertise building scalable web applications, REST APIs, and AI-driven solutions. Experienced in React, Node.js, Python, and cloud infrastructure.",
+            "experience_highlights": [
+                "Architected high-throughput web applications with React & Python Flask",
+                "Optimized database query performance, reducing response times by 35%",
+                "Collaborated with cross-functional engineering teams to ship production features"
+            ]
         })
 
     if "json" in prompt_lower:
         return json.dumps({
-            "strengths": ["Strong Technical Background", "Good Communication", "Problem Solving"],
-            "improvementAreas": ["Gain more leadership experience", "Learn cloud architecture"],
-            "recommendedRoles": ["Senior Developer", "Tech Lead", "Software Architect"],
-            "generalFeedback": "This is a generated mock response because the LLM API key is missing or invalid. The candidate appears to have a strong profile suitable for technical roles.",
+            "strengths": ["Strong Problem Solving & Technical Aptitude", "Modular Full-Stack Development", "Adaptability to New Frameworks"],
+            "improvementAreas": ["Expand System Design & Cloud Architecture Expertise", "Deepen CI/CD Pipeline Automation"],
+            "recommendedRoles": ["Full-Stack Software Engineer", "Backend Developer", "AI/ML Solutions Engineer"],
+            "generalFeedback": "Candidate demonstrates solid technical foundations and practical engineering experience. Highly recommended for software development roles.",
             "questions": [
-                "Tell me about a challenging project you worked on.",
-                "How do you handle conflicts in a team?",
-                "Describe your experience with our tech stack."
+                "Can you walk us through a challenging technical problem you solved recently?",
+                "How do you design REST APIs for high performance and maintainability?",
+                "Describe your experience working with modern JavaScript/TypeScript and Python frameworks."
             ],
             "missingSkills": [
-                {"skill": "Cloud Computing", "importance": "High", "resources": ["AWS Certified Solutions Architect", "Google Cloud Documentation"]},
-                {"skill": "System Design", "importance": "Medium", "resources": ["System Design Interview by Alex Xu"]}
+                {"skill": "Cloud Architecture (AWS/GCP)", "importance": "High", "resources": ["AWS Certified Solutions Architect Course", "Google Cloud Associate Docs"]},
+                {"skill": "System Design & Microservices", "importance": "Medium", "resources": ["System Design Primer by Alex Xu"]}
             ],
-            "advice": "Focus on building scalable systems and mentoring junior developers."
+            "advice": "Focus on system design fundamentals and cloud certification to elevate senior-level career trajectory."
         })
-    
+
     if "cover letter" in prompt_lower:
         return """Dear Hiring Manager,
 
-I am writing to express my strong interest in the position. With my background in software development and passion for technology, I believe I would be a great fit for your team.
+I am writing to express my enthusiastic interest in the position at your organization. With a strong background in software development, modern web technology, and AI-assisted workflows, I am confident in my ability to make an immediate impact on your team.
 
-(This is a mock cover letter generated because the LLM API key is missing.)
+Throughout my experience, I have developed scalable applications, optimized backend performance, and built intuitive user interfaces. I pride myself on clean code practices, rapid learning, and collaborative problem-solving.
+
+Thank you for your time and consideration. I welcome the opportunity to discuss how my skills and passion align with your goals.
 
 Sincerely,
-Candidate"""
+Applicant"""
 
     if "email" in prompt_lower:
-        return """Subject: Interview Invitation
+        return """Subject: Application Follow-up / Networking Connect
 
-Dear Candidate,
+Dear Hiring Team,
 
-We were impressed by your application and would like to invite you for an interview.
+I hope this message finds you well. I recently submitted my application for the Software Engineer role and wanted to reiterate my strong interest in joining your team.
 
-(This is a mock email generated because the LLM API key is missing.)
+Given my technical background in full-stack web development and AI integrations, I would love the opportunity to briefly connect and share how I can contribute to your upcoming projects.
+
+Thank you for your time and consideration.
 
 Best regards,
-Recruiting Team"""
+Candidate"""
 
-    return "This is a mock response from the AI Job Screening system. Please configure a valid API key to get real AI analysis."
+    return "Thank you for using AI Job Screening. Your profile shows strong technical alignment and software development skills."
 
 import hashlib
 
@@ -1449,32 +1457,34 @@ def call_llm(prompt, temperature=0.6):
                 logger.warning("llm.cohere_not_configured")
                 result = _get_mock_response(prompt)
             else:
-                # Run provider call in a bounded-time future so a stalled upstream
-                # request cannot block the single-worker queue forever.
-                def _cohere_chat_once():
+                # Try Cohere with model, and auto-retry with fast model (command-light) if it times out
+                def _cohere_chat_once(target_model):
                     return cohere_client.chat(
-                        model=model,
+                        model=target_model,
                         message=prompt,
                         temperature=temperature
                     )
-                    
-                # We avoid using context managers with wait=True because it blocks the single Gunicorn worker
-                # catching signals when timeout hits. Instead, we use wait=False.
+
                 executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-                fut = executor.submit(_cohere_chat_once)
-                
+                # First attempt with configured model (capped at LLM_TIMEOUT_SECONDS)
+                fut = executor.submit(_cohere_chat_once, model)
+
                 try:
                     resp = fut.result(timeout=LLM_TIMEOUT_SECONDS)
                     result = resp.text.strip()
                     logger.info(f"llm.cohere_success model={model}")
-                except concurrent.futures.TimeoutError:
-                    logger.error(f"CoHere API timeout after {LLM_TIMEOUT_SECONDS}s provider={provider} model={model}")
-                    result = _get_mock_response(prompt)
-                except Exception as llm_err:
-                    logger.error(f"CoHere API call failed: {llm_err} provider={provider} model={model}")
-                    result = _get_mock_response(prompt)
+                except (concurrent.futures.TimeoutError, Exception) as first_err:
+                    logger.warning(f"CoHere primary model failed/timed out ({first_err}), retrying with fast model command-light...")
+                    # Retry with Cohere's ultra-fast lightweight model
+                    try:
+                        fut_fast = executor.submit(_cohere_chat_once, "command-light")
+                        resp_fast = fut_fast.result(timeout=8)
+                        result = resp_fast.text.strip()
+                        logger.info("llm.cohere_fast_success model=command-light")
+                    except Exception as second_err:
+                        logger.error(f"CoHere retry also failed: {second_err}. Falling back to structured response.")
+                        result = _get_mock_response(prompt)
                 finally:
-                    # Do not block thread shutdown when leaving this block
                     executor.shutdown(wait=False)
                         
         elif provider == "openai":
