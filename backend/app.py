@@ -161,16 +161,32 @@ if _origins and _origins != "*":
 else:
     allowed_origins = default_origins
 
+import re as _re
+
+def _is_allowed_origin(origin: str) -> bool:
+    """Check if origin is in the allowed list, including *.vercel.app wildcards."""
+    if not origin:
+        return False
+    allowed_set = set(allowed_origins if isinstance(allowed_origins, list) else [allowed_origins])
+    if origin in allowed_set:
+        return True
+    if origin.endswith(".vercel.app") or origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1"):
+        return True
+    return False
+
+# Use a single permissive CORS config — the after_request handler does precise per-origin gating
 CORS(
     app,
     resources={
         r"/*": {
-            "origins": allowed_origins,
-            "allow_headers": "*",
+            "origins": "*",
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "expose_headers": ["Content-Disposition"],
+            "max_age": 600,
         }
     },
-    supports_credentials=True,
+    supports_credentials=False,  # Cannot combine supports_credentials=True with origins='*'
 )
 
 APP_VERSION = config.APP_VERSION  # increment when major feature blocks added
@@ -2184,14 +2200,12 @@ def index():
 
 @app.before_request
 def start_request_tracing():
-    if request.method == "OPTIONS":
-        return app.make_default_options_response()
-
     # 1. Capture or generate Request ID
     req_id = request.headers.get("X-Request-ID")
     if not req_id:
         req_id = str(uuid.uuid4())
     g.request_id = req_id
+
 
 @app.after_request
 def set_security_headers(response):
@@ -2205,35 +2219,50 @@ def set_security_headers(response):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     # HSTS enabled when served over HTTPS (ignored on HTTP)
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # Minimal CSP allowing self and inline styles/scripts used by Vite-dev; adjust for prod build
+    # Minimal CSP
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' data:; "
         "style-src 'self' 'unsafe-inline'; "
         "script-src 'self' 'unsafe-inline'; "
-        "connect-src 'self'"
+        "connect-src *"
     )
-
-    # Defensive CORS fallback for preflight/edge cases and Vercel preview domains.
-    origin = request.headers.get("Origin")
-    if origin:
-        normalized_allowed = set(allowed_origins if isinstance(allowed_origins, list) else [allowed_origins])
-        if (
-            origin in normalized_allowed
-            or origin.endswith(".vercel.app")
-            or origin.startswith("http://localhost")
-            or origin.startswith("http://127.0.0.1")
-        ):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = request.headers.get(
-                "Access-Control-Request-Headers",
-                "Authorization,Content-Type"
-            )
-            vary = response.headers.get("Vary", "")
-            response.headers["Vary"] = f"{vary}, Origin".strip(", ") if vary else "Origin"
     return response
+
+# ──────────────────────────────────────────────────────────────
+# Explicit OPTIONS preflight handler — MUST return 200 instantly
+# before the browser sends the actual request.
+# ──────────────────────────────────────────────────────────────
+@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def handle_preflight(path):
+    origin = request.headers.get("Origin", "")
+    response = app.make_default_options_response()
+    response.headers["Access-Control-Allow-Origin"] = origin if _is_allowed_origin(origin) else "null"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = request.headers.get(
+        "Access-Control-Request-Headers",
+        "Authorization,Content-Type,X-Requested-With"
+    )
+    response.headers["Access-Control-Max-Age"] = "600"
+    response.status_code = 200
+    return response
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Inject CORS headers on every response."""
+    origin = request.headers.get("Origin", "")
+    if _is_allowed_origin(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,X-Requested-With"
+        vary = response.headers.get("Vary", "")
+        response.headers["Vary"] = (f"{vary}, Origin".strip(", ") if vary else "Origin")
+    return response
+
 
 @app.route('/health', methods=['GET'])
 def health():
