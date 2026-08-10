@@ -88,5 +88,9 @@ def configure_logging() -> None:
     root.addHandler(handler)
     root.setLevel(logging.INFO)
 
+    # Silence noisy pdfminer font warnings
+    logging.getLogger("pdfminer").setLevel(logging.ERROR)
+    logging.getLogger("pdfplumber").setLevel(logging.ERROR)
+
 
 __all__ = ["Config", "init_directories", "configure_logging"]

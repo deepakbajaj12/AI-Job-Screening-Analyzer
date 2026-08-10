@@ -1474,15 +1474,16 @@ def call_llm(prompt, temperature=0.6):
                     result = resp.text.strip()
                     logger.info(f"llm.cohere_success model={model}")
                 except (concurrent.futures.TimeoutError, Exception) as first_err:
-                    logger.warning(f"CoHere primary model failed/timed out ({first_err}), retrying with fast model command-light...")
-                    # Retry with Cohere's ultra-fast lightweight model
+                    logger.warning(f"CoHere primary model failed/timed out ({first_err}), retrying with model command-r...")
+                    # Retry with Cohere's standard active model command-r
                     try:
-                        fut_fast = executor.submit(_cohere_chat_once, "command-light")
-                        resp_fast = fut_fast.result(timeout=8)
+                        retry_model = "command-r" if model != "command-r" else "command"
+                        fut_fast = executor.submit(_cohere_chat_once, retry_model)
+                        resp_fast = fut_fast.result(timeout=10)
                         result = resp_fast.text.strip()
-                        logger.info("llm.cohere_fast_success model=command-light")
+                        logger.info(f"llm.cohere_retry_success model={retry_model}")
                     except Exception as second_err:
-                        logger.error(f"CoHere retry also failed: {second_err}. Falling back to structured response.")
+                        logger.error(f"CoHere retry also failed: {second_err}. Returning structured response.")
                         result = _get_mock_response(prompt)
                 finally:
                     executor.shutdown(wait=False)
